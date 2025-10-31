@@ -21,8 +21,9 @@ def create_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  streamripper rtsp://example.com/stream
   streamripper rtsp://example.com/stream --duration 60
-  streamripper rtsp://example.com/stream --duration 30 --output-dir ./analysis
+  streamripper rtsp://example.com/stream --output-dir ./analysis
   streamripper rtsp://example.com/stream --duration 60 --debug-log --timestamp-prefix test
         """
     )
@@ -35,8 +36,8 @@ Examples:
     parser.add_argument(
         "--duration", "-d",
         type=int,
-        required=True,
-        help="Analysis duration in seconds"
+        default=30,
+        help="Analysis duration in seconds (default: 30)"
     )
     
     parser.add_argument(

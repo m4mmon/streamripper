@@ -133,17 +133,20 @@ pip install -e .
 ### Command Line Interface
 
 ```bash
+# Analyze an RTSP stream for 30 seconds (default duration)
+streamripper rtsp://example.com/stream
+
 # Analyze an RTSP stream for 60 seconds
-python -m streamripper.rtsp_analyzer rtsp://example.com/stream --duration 60
+streamripper rtsp://example.com/stream --duration 60
 
 # Analyze with custom output directory
-streamripper rtsp://example.com/stream --duration 30 --output-dir ./my_analysis
+streamripper rtsp://example.com/stream --output-dir ./my_analysis
 
 # Enable debug logging
-streamripper rtsp://example.com/stream --duration 60 --debug-log
+streamripper rtsp://example.com/stream --debug-log
 
 # Generate combined chart showing both audio and video time drifts (default)
-streamripper rtsp://example.com/stream --duration 60 --chart-type combined
+streamripper rtsp://example.com/stream --chart-type combined
 
 # Generate separate charts for audio and video
 streamripper rtsp://example.com/stream --duration 60 --chart-type separate
@@ -222,7 +225,7 @@ output/
 
 ### Command Line Options
 
-- `--duration`: Analysis duration in seconds (required)
+- `--duration`: Analysis duration in seconds (default: 30)
 - `--output-dir`: Output directory for results (default: current directory)
 - `--debug-log`: Enable detailed debug logging
 - `--timestamp-prefix`: Custom prefix for output files
