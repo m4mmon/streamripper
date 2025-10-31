@@ -26,6 +26,8 @@ Examples:
   streamripper rtsp://example.com/stream --output-dir ./analysis
   streamripper rtsp://example.com/stream --duration 60 --debug-log --timestamp-prefix test
   streamripper rtsp://example.com/stream --save-stream --duration 60
+  streamripper rtsp://example.com/stream --forensic --duration 60
+  streamripper rtsp://example.com/stream --forensic --save-stream --duration 60
         """
     )
     
@@ -79,7 +81,13 @@ Examples:
         action="store_true",
         help="Save the unaltered raw stream to file for further analysis"
     )
-    
+
+    parser.add_argument(
+        "--forensic",
+        action="store_true",
+        help="Enable forensic mode to detect and extract corrupted packets"
+    )
+
     parser.add_argument(
         "--version", "-v",
         action="version",
@@ -109,6 +117,7 @@ def main():
     print(f"Debug logging: {'enabled' if args.debug_log else 'disabled'}")
     print(f"Chart generation: {'disabled' if args.no_chart else f'enabled ({args.chart_type})'}")
     print(f"Stream saving: {'enabled' if args.save_stream else 'disabled'}")
+    print(f"Forensic mode: {'enabled' if args.forensic else 'disabled'}")
     print(f"Timestamp prefix: {args.timestamp_prefix}")
     print("-" * 40)
     
@@ -121,7 +130,8 @@ def main():
             output_dir=args.output_dir,
             debug_log=args.debug_log,
             timestamp_prefix=args.timestamp_prefix,
-            save_stream=args.save_stream
+            save_stream=args.save_stream,
+            forensic_mode=args.forensic
         )
         
         if data is not None and not data.empty:

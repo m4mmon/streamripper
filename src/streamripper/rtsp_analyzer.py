@@ -44,7 +44,7 @@ def sanitize_url_for_filename(url):
 
     return f"rtsp_{sanitized}"
 
-def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_prefix, save_stream=False):
+def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_prefix, save_stream=False, forensic_mode=False):
     """
     Analyzes an RTSP stream for a given duration and generates a report.
 
@@ -55,6 +55,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         debug_log (bool): Whether to enable per-frame debug logging.
         timestamp_prefix (str): Prefix for output files based on timestamp.
         save_stream (bool): Whether to save the unaltered raw stream to file.
+        forensic_mode (bool): Whether to extract and analyze corrupted packets.
 
     Returns:
         pandas.DataFrame: Analysis data with packet information, or None if failed.
@@ -108,6 +109,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             output_container = None
 
     packets = []
+    corrupted_packets = []  # Track corrupted packets for forensic analysis
     start_time = time.time()
 
     report_lines = []
@@ -118,6 +120,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     report_lines.append(f"Video Codec: {video_stream.codec_context.name}")
     if audio_stream:
         report_lines.append(f"Audio Codec: {audio_stream.codec_context.name}")
+    if forensic_mode:
+        report_lines.append("Forensic Mode: ENABLED - Corrupted packets will be extracted")
     report_lines.append("-" * 30)
 
     log_file = None
@@ -149,7 +153,22 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 pass
 
         if packet.stream.type == 'video':
-            for frame in packet.decode():
+            try:
+                frames = list(packet.decode())
+            except Exception as decode_error:
+                # Capture corruption information
+                if forensic_mode:
+                    corrupted_packets.append({
+                        'packet_index': len(packets) + len(corrupted_packets),
+                        'timestamp': packet.pts if packet.pts else 'unknown',
+                        'size': packet.size,
+                        'error': str(decode_error),
+                        'error_type': type(decode_error).__name__,
+                        'packet_data': packet.to_bytes() if hasattr(packet, 'to_bytes') else None
+                    })
+                continue
+
+            for frame in frames:
                 if frame.pts is None:
                     print(f"Warning: Frame {len(packets)} has no PTS. Skipping.")
                     continue
@@ -294,6 +313,54 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             max_audio_drift = max(audio_drifts, key=abs)
             report_lines.append(f"Average wall clock drift: {avg_audio_drift:.2f} ms")
             report_lines.append(f"Max wall clock drift: {max_audio_drift:.2f} ms")
+
+    # Add forensic corruption analysis if enabled
+    if forensic_mode and corrupted_packets:
+        report_lines.append("-" * 30)
+        report_lines.append("FORENSIC CORRUPTION ANALYSIS")
+        report_lines.append(f"Total corrupted packets detected: {len(corrupted_packets)}")
+        report_lines.append("")
+
+        # Group errors by type
+        error_types = Counter([p['error_type'] for p in corrupted_packets])
+        report_lines.append("Corruption Types:")
+        for error_type, count in error_types.items():
+            report_lines.append(f"  - {error_type}: {count} occurrences")
+
+        report_lines.append("")
+        report_lines.append("Detailed Corruption Events:")
+        for i, corrupt_pkt in enumerate(corrupted_packets[:20], 1):  # Show first 20
+            report_lines.append(f"  [{i}] Packet #{corrupt_pkt['packet_index']}")
+            report_lines.append(f"      Timestamp: {corrupt_pkt['timestamp']}")
+            report_lines.append(f"      Size: {corrupt_pkt['size']} bytes")
+            report_lines.append(f"      Error Type: {corrupt_pkt['error_type']}")
+            report_lines.append(f"      Error: {corrupt_pkt['error'][:100]}")
+
+        if len(corrupted_packets) > 20:
+            report_lines.append(f"  ... and {len(corrupted_packets) - 20} more corrupted packets")
+
+        # Save corrupted packets to separate file
+        corruption_report_path = os.path.join(stream_output_dir, f"{timestamp_prefix}_corruption.txt")
+        with open(corruption_report_path, "w") as f:
+            f.write("DETAILED CORRUPTION FORENSIC REPORT\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Stream: {rtsp_url}\n")
+            f.write("=" * 60 + "\n\n")
+
+            for i, corrupt_pkt in enumerate(corrupted_packets, 1):
+                f.write(f"Corrupted Packet #{i}\n")
+                f.write(f"  Packet Index: {corrupt_pkt['packet_index']}\n")
+                f.write(f"  Timestamp (PTS): {corrupt_pkt['timestamp']}\n")
+                f.write(f"  Packet Size: {corrupt_pkt['size']} bytes\n")
+                f.write(f"  Error Type: {corrupt_pkt['error_type']}\n")
+                f.write(f"  Error Description: {corrupt_pkt['error']}\n")
+                f.write("-" * 60 + "\n\n")
+
+        print(f"Corruption report saved to {corruption_report_path}")
+    elif forensic_mode:
+        report_lines.append("-" * 30)
+        report_lines.append("FORENSIC CORRUPTION ANALYSIS")
+        report_lines.append("No corrupted packets detected.")
 
     report_lines.append("-" * 30)
     report_lines.append("Analysis finished.")
