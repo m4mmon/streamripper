@@ -140,7 +140,8 @@ def main():
 
             # Calculate the organized output directory (same as in analyze_rtsp_stream)
             sanitized_url = sanitize_url_for_filename(args.rtsp_url)
-            stream_output_dir = os.path.join(args.output_dir, sanitized_url)
+            timestamp_dir = datetime.now().strftime('%Y%m%d_%H%M%S')
+            stream_output_dir = os.path.join(args.output_dir, sanitized_url, timestamp_dir)
 
             # Generate chart unless disabled
             if not args.no_chart:
