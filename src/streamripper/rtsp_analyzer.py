@@ -78,54 +78,26 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
     # Set up stream saving if requested
     output_container = None
+    stream_filename = None
     if save_stream:
         stream_filename = os.path.join(stream_output_dir, f"{timestamp_prefix}_stream.mp4")
         try:
             output_container = av.open(stream_filename, 'w')
             print(f"Stream will be saved to: {stream_filename}")
+
+            # Add streams to output container
+            for stream in container.streams:
+                if stream.type == 'video' or stream.type == 'audio':
+                    output_container.add_stream(template=stream)
         except Exception as e:
             print(f"Warning: Could not create output file for stream saving: {e}")
             save_stream = False
+            output_container = None
 
     video_stream = container.streams.video[0]
     audio_stream = None
     if container.streams.audio:
         audio_stream = container.streams.audio[0]
-
-    # Set up output streams for saving if requested
-    output_video_stream = None
-    output_audio_stream = None
-    stream_mapping = {}
-    if save_stream and output_container:
-        try:
-            # Create video stream with codec name
-            codec_name = video_stream.codec_context.name
-            output_video_stream = output_container.add_stream(codec_name)
-
-            # Copy video stream properties
-            if video_stream.codec_context.width:
-                output_video_stream.width = video_stream.codec_context.width
-            if video_stream.codec_context.height:
-                output_video_stream.height = video_stream.codec_context.height
-            if video_stream.codec_context.pix_fmt:
-                output_video_stream.pix_fmt = video_stream.codec_context.pix_fmt
-
-            stream_mapping[video_stream.index] = output_video_stream
-
-            # Create audio stream if present
-            if audio_stream:
-                audio_codec_name = audio_stream.codec_context.name
-                output_audio_stream = output_container.add_stream(audio_codec_name)
-
-                # Copy audio stream properties
-                if audio_stream.codec_context.sample_rate:
-                    output_audio_stream.rate = audio_stream.codec_context.sample_rate
-
-                stream_mapping[audio_stream.index] = output_audio_stream
-
-        except Exception as e:
-            print(f"Warning: Could not set up output streams: {e}")
-            save_stream = False
 
     packets = []
     start_time = time.time()
@@ -160,15 +132,13 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             break
 
         # Save packet to output file if stream saving is enabled
-        if save_stream and output_container and packet.stream.index in stream_mapping:
+        if save_stream and output_container:
             try:
-                # Copy packet to corresponding output stream
-                output_stream = stream_mapping[packet.stream.index]
-                packet.stream = output_stream
+                # Mux the packet directly to the output container
                 output_container.mux(packet)
             except Exception as e:
-                # Continue analysis even if saving fails
-                print(f"Warning: Could not save packet: {e}")
+                # Continue analysis even if saving fails - don't spam warnings
+                pass
 
         if packet.stream.type == 'video':
             for frame in packet.decode():
