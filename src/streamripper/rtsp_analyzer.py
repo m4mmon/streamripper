@@ -85,30 +85,26 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         audio_stream = container.streams.audio[0]
 
     # Set up stream saving if requested
-    output_container = None
+    # Save raw bitstream without muxing to preserve original data
+    stream_file = None
     stream_filename = None
     if save_stream:
-        stream_filename = os.path.join(stream_output_dir, "stream.mp4")
+        # Determine codec and file extension
+        video_codec = video_stream.codec_context.name
+        if video_codec == 'h264':
+            stream_filename = os.path.join(stream_output_dir, "stream.h264")
+        elif video_codec == 'hevc':
+            stream_filename = os.path.join(stream_output_dir, "stream.h265")
+        else:
+            stream_filename = os.path.join(stream_output_dir, f"stream.{video_codec}")
+
         try:
-            output_container = av.open(stream_filename, 'w')
+            stream_file = open(stream_filename, 'wb')
             print(f"Stream will be saved to: {stream_filename}")
-
-            # Add video stream to output container
-            video_codec = video_stream.codec_context.name
-            out_video = output_container.add_stream(video_codec)
-            out_video.width = video_stream.codec_context.width
-            out_video.height = video_stream.codec_context.height
-
-            # Add audio stream if present
-            if audio_stream:
-                audio_codec = audio_stream.codec_context.name
-                out_audio = output_container.add_stream(audio_codec)
-                out_audio.rate = audio_stream.codec_context.sample_rate
-
         except Exception as e:
             print(f"Warning: Could not create output file for stream saving: {e}")
             save_stream = False
-            output_container = None
+            stream_file = None
 
     packets = []
     corrupted_packets = []  # Track corrupted packets for forensic analysis
@@ -145,13 +141,12 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         if (time.time() - start_time) > duration:
             break
 
-        # Save packet to output file if stream saving is enabled
-        if save_stream and output_container:
+        # Save raw packet data if stream saving is enabled
+        if save_stream and stream_file and packet.stream.type == 'video':
             try:
-                # Mux the packet directly to the output container
-                output_container.mux(packet)
+                stream_file.write(bytes(packet))
             except Exception as e:
-                # Continue analysis even if saving fails - don't spam warnings
+                # Continue analysis even if saving fails
                 pass
 
         if packet.stream.type == 'video':
@@ -399,16 +394,26 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             except Exception as e:
                 print(f"Warning: Error closing output file: {e}")
 
+        # Close stream file if it was opened
+        if save_stream and stream_file:
+            try:
+                stream_file.close()
+                file_size = os.path.getsize(stream_filename)
+                print(f"✓ Stream saved successfully! ({file_size} bytes)")
+            except Exception as e:
+                print(f"Warning: Error closing stream file: {e}")
+
         container.close()
         return pd.DataFrame(df_data), stream_output_dir
     else:
-        # Close output container if it was opened
-        if save_stream and output_container:
+        # Close stream file if it was opened
+        if save_stream and stream_file:
             try:
-                output_container.close()
-                print(f"✓ Stream saved (no analysis data collected)")
+                stream_file.close()
+                file_size = os.path.getsize(stream_filename)
+                print(f"✓ Stream saved (no analysis data collected) ({file_size} bytes)")
             except Exception as e:
-                print(f"Warning: Error closing output file: {e}")
+                print(f"Warning: Error closing stream file: {e}")
 
         container.close()
         return None, stream_output_dir

@@ -200,7 +200,7 @@ Streamripper generates several types of output:
    - **Audio-only Chart**: Focus on audio stream analysis
 3. **Console Report**: Summary statistics and analysis results
 4. **Debug Logs**: Detailed logging information (when enabled)
-5. **Raw Stream File**: Unaltered MP4 stream file (when `--save-stream` is used)
+5. **Raw Bitstream File**: Unaltered H.264/H.265 bitstream (when `--save-stream` is used)
 
 ### Organized Output Structure
 
@@ -213,13 +213,13 @@ output/
         ├── report.txt
         ├── flow.csv                 # Debug flow data (when --debug-log used)
         ├── chart_combined.png       # Analysis chart
-        ├── stream.mp4               # Raw stream (when --save-stream used)
+        ├── stream.h264              # Raw H.264 bitstream (when --save-stream used)
         └── corruption.txt           # Corruption details (when --forensic used)
 └── camera_example_com_554_stream/   # Another stream
     └── 20231031_150000/
         ├── report.txt
         ├── chart_combined.png
-        └── stream.mp4
+        └── stream.h265              # Raw H.265 bitstream
 ```
 
 **Directory Naming:**
@@ -245,7 +245,7 @@ output/
 - `--timestamp-prefix`: Custom prefix for output files
 - `--chart-type`: Type of chart to generate (combined, comprehensive, separate, video-only, audio-only)
 - `--no-chart`: Skip chart generation entirely
-- `--save-stream`: Save the unaltered raw stream to MP4 file for further analysis
+- `--save-stream`: Save the unaltered raw bitstream (H.264/H.265) for further analysis
 
 ## Development
 
