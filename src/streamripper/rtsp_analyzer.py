@@ -7,6 +7,33 @@ import pandas as pd
 from datetime import datetime
 from collections import Counter
 
+def _save_hex_dump(hex_dump_dir, packet_index, packet_data):
+    """
+    Save packet data as a hex dump file for forensic analysis.
+
+    Args:
+        hex_dump_dir (str): Directory to save hex dumps
+        packet_index (int): Index of the packet
+        packet_data (bytes): Raw packet data
+    """
+    try:
+        filename = os.path.join(hex_dump_dir, f"frame{packet_index:04d}.hex")
+        with open(filename, 'w') as f:
+            # Write header
+            f.write(f"Packet Index: {packet_index}\n")
+            f.write(f"Packet Size: {len(packet_data)} bytes\n")
+            f.write(f"Generated: {datetime.now().isoformat()}\n")
+            f.write("=" * 80 + "\n\n")
+
+            # Write hex dump with ASCII representation
+            for i in range(0, len(packet_data), 16):
+                chunk = packet_data[i:i+16]
+                hex_str = ' '.join(f'{b:02x}' for b in chunk)
+                ascii_str = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
+                f.write(f"{i:08x}  {hex_str:<48}  {ascii_str}\n")
+    except Exception as e:
+        print(f"Warning: Could not save hex dump for packet {packet_index}: {e}")
+
 def sanitize_url_for_filename(url):
     """
     Sanitizes a URL to be used as a safe directory name.
@@ -88,6 +115,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     # Save raw bitstream without muxing to preserve original data
     stream_file = None
     stream_filename = None
+    hex_dump_dir = None
     if save_stream:
         # Determine codec and file extension
         video_codec = video_stream.codec_context.name
@@ -105,6 +133,15 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             print(f"Warning: Could not create output file for stream saving: {e}")
             save_stream = False
             stream_file = None
+
+    # Set up hex dump directory for corrupted frames if forensic mode enabled
+    if forensic_mode:
+        hex_dump_dir = os.path.join(stream_output_dir, "corrupted_frames_hex")
+        try:
+            os.makedirs(hex_dump_dir, exist_ok=True)
+        except Exception as e:
+            print(f"Warning: Could not create hex dump directory: {e}")
+            hex_dump_dir = None
 
     packets = []
     corrupted_packets = []  # Track corrupted packets for forensic analysis
@@ -157,51 +194,67 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                     av.BugError, av.BufferTooSmallError) as decode_error:
                 # Capture PyAV-specific corruption and decoding errors
                 if forensic_mode:
+                    packet_index = len(packets) + len(corrupted_packets)
                     corrupted_packets.append({
-                        'packet_index': len(packets) + len(corrupted_packets),
+                        'packet_index': packet_index,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'packet_data': None
+                        'packet_data': bytes(packet)
                     })
+                    # Save hex dump of corrupted packet
+                    if hex_dump_dir:
+                        _save_hex_dump(hex_dump_dir, packet_index, bytes(packet))
                 continue
             except av.FFmpegError as decode_error:
                 # Catch other FFmpeg errors
                 if forensic_mode:
+                    packet_index = len(packets) + len(corrupted_packets)
                     corrupted_packets.append({
-                        'packet_index': len(packets) + len(corrupted_packets),
+                        'packet_index': packet_index,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'packet_data': None
+                        'packet_data': bytes(packet)
                     })
+                    # Save hex dump of corrupted packet
+                    if hex_dump_dir:
+                        _save_hex_dump(hex_dump_dir, packet_index, bytes(packet))
                 continue
             except Exception as decode_error:
                 # Catch other unexpected errors
                 if forensic_mode:
+                    packet_index = len(packets) + len(corrupted_packets)
                     corrupted_packets.append({
-                        'packet_index': len(packets) + len(corrupted_packets),
+                        'packet_index': packet_index,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'packet_data': None
+                        'packet_data': bytes(packet)
                     })
+                    # Save hex dump of corrupted packet
+                    if hex_dump_dir:
+                        _save_hex_dump(hex_dump_dir, packet_index, bytes(packet))
                 continue
 
             # Check if frames were actually decoded (forensic check)
             if forensic_mode and len(frames) == 0 and packet.size > 0:
                 # Packet had data but produced no frames - likely corruption
+                packet_index = len(packets) + len(corrupted_packets)
                 corrupted_packets.append({
-                    'packet_index': len(packets) + len(corrupted_packets),
+                    'packet_index': packet_index,
                     'timestamp': packet.pts if packet.pts else 'unknown',
                     'size': packet.size,
                     'error': 'Packet produced no decoded frames',
                     'error_type': 'NoFramesDecoded',
-                    'packet_data': None
+                    'packet_data': bytes(packet)
                 })
+                # Save hex dump of corrupted packet
+                if hex_dump_dir:
+                    _save_hex_dump(hex_dump_dir, packet_index, bytes(packet))
 
             for frame in frames:
                 if frame.pts is None:
