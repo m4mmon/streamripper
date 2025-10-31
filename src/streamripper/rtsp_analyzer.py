@@ -58,10 +58,11 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         forensic_mode (bool): Whether to extract and analyze corrupted packets.
 
     Returns:
-        pandas.DataFrame: Analysis data with packet information, or None if failed.
+        tuple: (pandas.DataFrame with analysis data, str with output directory path)
+               Returns (None, output_dir) if analysis failed.
 
     Note:
-        Creates organized directory structure: output_dir/sanitized_url/timestamp_files
+        Creates organized directory structure: output_dir/sanitized_url/YYYYMMDD_HHMMSS/
     """
     # Create organized output directory structure: output_dir/sanitized_url/timestamp/
     sanitized_url = sanitize_url_for_filename(rtsp_url)
@@ -74,9 +75,9 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     except Exception as e:
         report = f"Error: Could not open RTSP stream at {rtsp_url}: {e}\n"
         print(report)
-        with open(os.path.join(stream_output_dir, f"{timestamp_prefix}_report.txt"), "w") as f:
+        with open(os.path.join(stream_output_dir, "report.txt"), "w") as f:
             f.write(report)
-        return None
+        return None, stream_output_dir
 
     video_stream = container.streams.video[0]
     audio_stream = None
@@ -399,7 +400,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 print(f"Warning: Error closing output file: {e}")
 
         container.close()
-        return pd.DataFrame(df_data)
+        return pd.DataFrame(df_data), stream_output_dir
     else:
         # Close output container if it was opened
         if save_stream and output_container:
@@ -410,7 +411,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 print(f"Warning: Error closing output file: {e}")
 
         container.close()
-        return None
+        return None, stream_output_dir
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RTSP Stream Forensic Analyzer")

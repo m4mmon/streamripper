@@ -124,7 +124,7 @@ def main():
     try:
         # Analyze the stream
         print("Starting stream analysis...")
-        data = analyze_rtsp_stream(
+        data, stream_output_dir = analyze_rtsp_stream(
             rtsp_url=args.rtsp_url,
             duration=args.duration,
             output_dir=args.output_dir,
@@ -133,15 +133,10 @@ def main():
             save_stream=args.save_stream,
             forensic_mode=args.forensic
         )
-        
+
         if data is not None and not data.empty:
             print(f"✓ Analysis completed successfully!")
             print(f"  Frames analyzed: {len(data)}")
-
-            # Calculate the organized output directory (same as in analyze_rtsp_stream)
-            sanitized_url = sanitize_url_for_filename(args.rtsp_url)
-            timestamp_dir = datetime.now().strftime('%Y%m%d_%H%M%S')
-            stream_output_dir = os.path.join(args.output_dir, sanitized_url, timestamp_dir)
 
             # Generate chart unless disabled
             if not args.no_chart:
