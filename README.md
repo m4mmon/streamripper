@@ -204,27 +204,31 @@ Streamripper generates several types of output:
 
 ### Organized Output Structure
 
-Streamripper automatically organizes outputs by stream source for easy management:
+Streamripper automatically organizes outputs by stream source and run timestamp:
 
 ```
 output/
-└── rtsp_192_168_88_33_ch0/          # Sanitized URL directory
-    ├── analysis_20231031_143022_flow.csv
-    ├── analysis_20231031_143022_chart_comprehensive.png
-    ├── analysis_20231031_143022_report.txt
-    └── analysis_20231031_143022_stream.mp4  # Raw stream (when --save-stream used)
-└── rtsp_camera_example_com_554_stream/  # Another stream
-    ├── analysis_20231031_150000_flow.csv
-    ├── analysis_20231031_150000_chart_combined.png
-    ├── analysis_20231031_150000_report.txt
-    └── analysis_20231031_150000_stream.mp4  # Raw stream (when --save-stream used)
+└── 192_168_88_33_ch0/               # Sanitized URL directory (no protocol)
+    └── 20231031_143022/             # Timestamp directory for this run
+        ├── report.txt
+        ├── flow.csv                 # Debug flow data (when --debug-log used)
+        ├── chart_combined.png       # Analysis chart
+        ├── stream.mp4               # Raw stream (when --save-stream used)
+        └── corruption.txt           # Corruption details (when --forensic used)
+└── camera_example_com_554_stream/   # Another stream
+    └── 20231031_150000/
+        ├── report.txt
+        ├── chart_combined.png
+        └── stream.mp4
 ```
 
 **Directory Naming:**
 - Credentials are automatically removed from URLs
+- Protocol prefix (rtsp://) is removed
 - Non-alphanumeric characters become underscores
-- `rtsp://user:pass@192.168.88.33/ch0` → `rtsp_192_168_88_33_ch0/`
-- `rtsp://camera.example.com:554/stream` → `rtsp_camera_example_com_554_stream/`
+- `rtsp://user:pass@192.168.88.33/ch0` → `192_168_88_33_ch0/`
+- `rtsp://camera.example.com:554/stream` → `camera_example_com_554_stream/`
+- Each run creates a timestamped subdirectory for clean organization
 
 ## Configuration
 

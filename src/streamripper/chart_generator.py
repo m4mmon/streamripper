@@ -49,7 +49,7 @@ def generate_combined_chart(output_dir, data, timestamp_prefix):
         drift_range = max_drift - min_drift
         ax2.set_ylim(min_drift - drift_range * 0.1, max_drift + drift_range * 0.1)
 
-    fig.suptitle(f'Stream Analysis - Frame Sizes & Time Drifts\nRun at: {timestamp_prefix}', fontsize=16)
+    fig.suptitle(f'Stream Analysis - Frame Sizes & Time Drifts', fontsize=16)
 
     # Combine legends from both axes
     lines1, labels1 = ax1.get_legend_handles_labels()
@@ -58,7 +58,7 @@ def generate_combined_chart(output_dir, data, timestamp_prefix):
 
     fig.tight_layout(rect=[0, 0, 1, 0.95])
 
-    chart_path = os.path.join(output_dir, f"{timestamp_prefix}_chart_combined.png")
+    chart_path = os.path.join(output_dir, "chart_combined.png")
     plt.savefig(chart_path, dpi=300, bbox_inches='tight')
     print(f"Combined chart saved to {chart_path}")
 
@@ -126,7 +126,7 @@ def generate_comprehensive_chart(output_dir, data, timestamp_prefix):
 
     plt.tight_layout()
 
-    chart_path = os.path.join(output_dir, f"{timestamp_prefix}_chart_comprehensive.png")
+    chart_path = os.path.join(output_dir, "chart_comprehensive.png")
     plt.savefig(chart_path, dpi=300, bbox_inches='tight')
     print(f"Comprehensive chart saved to {chart_path}")
     plt.close()
@@ -158,7 +158,7 @@ def generate_video_chart(output_dir, data, timestamp_prefix):
 
     fig.tight_layout(rect=[0, 0, 1, 0.95])
 
-    chart_path = os.path.join(output_dir, f"{timestamp_prefix}_chart_video.png")
+    chart_path = os.path.join(output_dir, "chart_video.png")
     plt.savefig(chart_path)
     print(f"Video chart saved to {chart_path}")
 
@@ -186,7 +186,7 @@ def generate_audio_chart(output_dir, data, timestamp_prefix):
     
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     
-    chart_path = os.path.join(output_dir, f"{timestamp_prefix}_chart_audio.png")
+    chart_path = os.path.join(output_dir, "chart_audio.png")
     plt.savefig(chart_path)
     print(f"Audio chart saved to {chart_path}")
 

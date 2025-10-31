@@ -11,7 +11,7 @@ def sanitize_url_for_filename(url):
     """
     Sanitizes a URL to be used as a safe directory name.
 
-    Removes credentials, protocol, and replaces non-alphanumeric characters with underscores.
+    Removes credentials and protocol, replaces non-alphanumeric characters with underscores.
 
     Args:
         url (str): The original URL
@@ -20,8 +20,8 @@ def sanitize_url_for_filename(url):
         str: Sanitized string safe for use as directory name
 
     Examples:
-        rtsp://user:pass@192.168.1.100/ch0 -> rtsp_192_168_1_100_ch0
-        rtsp://camera.example.com:554/stream -> rtsp_camera_example_com_554_stream
+        rtsp://user:pass@192.168.1.100/ch0 -> 192_168_1_100_ch0
+        rtsp://camera.example.com:554/stream -> camera_example_com_554_stream
     """
     # Remove credentials (everything between :// and @)
     url_no_creds = re.sub(r"://.*?@", "://", url)
@@ -38,11 +38,11 @@ def sanitize_url_for_filename(url):
     # Remove leading/trailing underscores
     sanitized = sanitized.strip('_')
 
-    # Add rtsp prefix and ensure it's not empty
+    # Ensure it's not empty
     if not sanitized:
         sanitized = "unknown_stream"
 
-    return f"rtsp_{sanitized}"
+    return sanitized
 
 def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_prefix, save_stream=False, forensic_mode=False):
     """
@@ -63,9 +63,10 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     Note:
         Creates organized directory structure: output_dir/sanitized_url/timestamp_files
     """
-    # Create organized output directory structure
+    # Create organized output directory structure: output_dir/sanitized_url/timestamp/
     sanitized_url = sanitize_url_for_filename(rtsp_url)
-    stream_output_dir = os.path.join(output_dir, sanitized_url)
+    timestamp_dir = datetime.now().strftime('%Y%m%d_%H%M%S')
+    stream_output_dir = os.path.join(output_dir, sanitized_url, timestamp_dir)
     os.makedirs(stream_output_dir, exist_ok=True)
 
     try:
@@ -86,7 +87,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     output_container = None
     stream_filename = None
     if save_stream:
-        stream_filename = os.path.join(stream_output_dir, f"{timestamp_prefix}_stream.mp4")
+        stream_filename = os.path.join(stream_output_dir, "stream.mp4")
         try:
             output_container = av.open(stream_filename, 'w')
             print(f"Stream will be saved to: {stream_filename}")
@@ -126,7 +127,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
     log_file = None
     if debug_log:
-        log_path = os.path.join(stream_output_dir, f"{timestamp_prefix}_flow.csv")
+        log_path = os.path.join(stream_output_dir, "flow.csv")
         log_file = open(log_path, "w")
         log_file.write("Packet,Type,Timestamp (ms),Wall Clock Time (ms),Drift (ms),Packet Size (bytes)\n")
 
@@ -233,7 +234,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
     if log_file:
         log_file.close()
-        print(f"Flow data saved to {os.path.join(stream_output_dir, f'{timestamp_prefix}_flow.csv')}")
+        print(f"Flow data saved to {os.path.join(stream_output_dir, 'flow.csv')}")
 
     # Sort packets by wall clock time
     packets.sort(key=lambda p: p['wall_clock'])
@@ -340,7 +341,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             report_lines.append(f"  ... and {len(corrupted_packets) - 20} more corrupted packets")
 
         # Save corrupted packets to separate file
-        corruption_report_path = os.path.join(stream_output_dir, f"{timestamp_prefix}_corruption.txt")
+        corruption_report_path = os.path.join(stream_output_dir, "corruption.txt")
         with open(corruption_report_path, "w") as f:
             f.write("DETAILED CORRUPTION FORENSIC REPORT\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -368,7 +369,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     report = "\n".join(report_lines)
     print(report)
 
-    report_path = os.path.join(stream_output_dir, f"{timestamp_prefix}_report.txt")
+    report_path = os.path.join(stream_output_dir, "report.txt")
     with open(report_path, "w") as f:
         f.write(report)
 
