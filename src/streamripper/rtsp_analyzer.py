@@ -69,7 +69,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
     try:
         container = av.open(rtsp_url, timeout=10)
-    except av.AVError as e:
+    except Exception as e:
         report = f"Error: Could not open RTSP stream at {rtsp_url}: {e}\n"
         print(report)
         with open(os.path.join(stream_output_dir, f"{timestamp_prefix}_report.txt"), "w") as f:
@@ -83,7 +83,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         try:
             output_container = av.open(stream_filename, 'w')
             print(f"Stream will be saved to: {stream_filename}")
-        except av.AVError as e:
+        except Exception as e:
             print(f"Warning: Could not create output file for stream saving: {e}")
             save_stream = False
 
@@ -95,16 +95,35 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     # Set up output streams for saving if requested
     output_video_stream = None
     output_audio_stream = None
+    stream_mapping = {}
     if save_stream and output_container:
         try:
-            # Copy video stream
-            output_video_stream = output_container.add_stream(template=video_stream)
+            # Create video stream with codec name
+            codec_name = video_stream.codec_context.name
+            output_video_stream = output_container.add_stream(codec_name)
 
-            # Copy audio stream if present
+            # Copy video stream properties
+            if video_stream.codec_context.width:
+                output_video_stream.width = video_stream.codec_context.width
+            if video_stream.codec_context.height:
+                output_video_stream.height = video_stream.codec_context.height
+            if video_stream.codec_context.pix_fmt:
+                output_video_stream.pix_fmt = video_stream.codec_context.pix_fmt
+
+            stream_mapping[video_stream.index] = output_video_stream
+
+            # Create audio stream if present
             if audio_stream:
-                output_audio_stream = output_container.add_stream(template=audio_stream)
+                audio_codec_name = audio_stream.codec_context.name
+                output_audio_stream = output_container.add_stream(audio_codec_name)
 
-        except av.AVError as e:
+                # Copy audio stream properties
+                if audio_stream.codec_context.sample_rate:
+                    output_audio_stream.rate = audio_stream.codec_context.sample_rate
+
+                stream_mapping[audio_stream.index] = output_audio_stream
+
+        except Exception as e:
             print(f"Warning: Could not set up output streams: {e}")
             save_stream = False
 
@@ -141,15 +160,13 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             break
 
         # Save packet to output file if stream saving is enabled
-        if save_stream and output_container:
+        if save_stream and output_container and packet.stream.index in stream_mapping:
             try:
-                if packet.stream.type == 'video' and output_video_stream:
-                    packet.stream = output_video_stream
-                    output_container.mux(packet)
-                elif packet.stream.type == 'audio' and output_audio_stream:
-                    packet.stream = output_audio_stream
-                    output_container.mux(packet)
-            except av.AVError as e:
+                # Copy packet to corresponding output stream
+                output_stream = stream_mapping[packet.stream.index]
+                packet.stream = output_stream
+                output_container.mux(packet)
+            except Exception as e:
                 # Continue analysis even if saving fails
                 print(f"Warning: Could not save packet: {e}")
 
@@ -332,7 +349,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             try:
                 output_container.close()
                 print(f"✓ Stream saved successfully!")
-            except av.AVError as e:
+            except Exception as e:
                 print(f"Warning: Error closing output file: {e}")
 
         container.close()
@@ -343,7 +360,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             try:
                 output_container.close()
                 print(f"✓ Stream saved (no analysis data collected)")
-            except av.AVError as e:
+            except Exception as e:
                 print(f"Warning: Error closing output file: {e}")
 
         container.close()
