@@ -133,16 +133,22 @@ pip install -e .
 ### Command Line Interface
 
 ```bash
-# Analyze an RTSP stream (saves stream, debug log, and chart by default)
+# Full analysis (stream, debug log, forensic, and chart by default)
 streamripper rtsp://example.com/stream
 
 # Analyze for 60 seconds instead of default 30
 streamripper rtsp://example.com/stream --duration 60
 
-# Minimal output (skip stream saving and debug log)
-streamripper rtsp://example.com/stream --no-save-stream --no-debug-log
+# Minimal output (only chart and report)
+streamripper rtsp://example.com/stream --no-save-stream --no-debug-log --no-forensic
 
-# Skip chart generation but keep stream and debug log
+# Skip stream saving but keep debug log and forensic
+streamripper rtsp://example.com/stream --no-save-stream
+
+# Skip forensic corruption detection
+streamripper rtsp://example.com/stream --no-forensic
+
+# Skip chart generation but keep stream, debug log, and forensic
 streamripper rtsp://example.com/stream --no-chart
 
 # Custom output directory
@@ -156,12 +162,6 @@ streamripper rtsp://example.com/stream --chart-type video-only
 
 # Generate comprehensive chart with all packets and separate drift lines
 streamripper rtsp://example.com/stream --chart-type comprehensive
-
-# Enable forensic mode to detect corrupted packets
-streamripper rtsp://example.com/stream --forensic --duration 60
-
-# Forensic analysis with all features enabled
-streamripper rtsp://example.com/stream --forensic --duration 60
 ```
 
 ### Python API
@@ -243,10 +243,10 @@ output/
 - `--output-dir`: Output directory for results (default: ./output)
 - `--no-debug-log`: Disable debug flow logging (enabled by default)
 - `--no-save-stream`: Disable raw bitstream saving (enabled by default)
+- `--no-forensic`: Disable forensic corruption detection (enabled by default)
 - `--timestamp-prefix`: Custom prefix for output files
 - `--chart-type`: Type of chart to generate (combined, comprehensive, separate, video-only, audio-only) (default: combined)
 - `--no-chart`: Skip chart generation entirely
-- `--forensic`: Enable forensic mode to detect and extract corrupted packets
 
 ## Development
 

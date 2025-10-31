@@ -22,13 +22,14 @@ def create_parser():
         epilog="""
 Examples:
   streamripper rtsp://example.com/stream
-    (saves stream, debug log, and chart by default)
+    (full analysis: stream, debug log, forensic, and chart)
   streamripper rtsp://example.com/stream --duration 60
-  streamripper rtsp://example.com/stream --no-save-stream --no-debug-log
+  streamripper rtsp://example.com/stream --no-save-stream --no-debug-log --no-forensic
     (minimal output, only chart and report)
-  streamripper rtsp://example.com/stream --forensic --duration 60
   streamripper rtsp://example.com/stream --no-chart --duration 60
-    (skip chart generation, keep stream and debug log)
+    (skip chart, keep stream, debug log, and forensic)
+  streamripper rtsp://example.com/stream --no-forensic
+    (skip forensic corruption detection)
         """
     )
     
@@ -84,9 +85,9 @@ Examples:
     )
 
     parser.add_argument(
-        "--forensic",
+        "--no-forensic",
         action="store_true",
-        help="Enable forensic mode to detect and extract corrupted packets"
+        help="Disable forensic corruption detection (enabled by default)"
     )
 
     parser.add_argument(
@@ -118,7 +119,7 @@ def main():
     print(f"Debug logging: {'disabled' if args.no_debug_log else 'enabled'}")
     print(f"Chart generation: {'disabled' if args.no_chart else f'enabled ({args.chart_type})'}")
     print(f"Stream saving: {'disabled' if args.no_save_stream else 'enabled'}")
-    print(f"Forensic mode: {'enabled' if args.forensic else 'disabled'}")
+    print(f"Forensic mode: {'disabled' if args.no_forensic else 'enabled'}")
     print(f"Timestamp prefix: {args.timestamp_prefix}")
     print("-" * 40)
     
@@ -132,7 +133,7 @@ def main():
             debug_log=not args.no_debug_log,  # Enabled by default
             timestamp_prefix=args.timestamp_prefix,
             save_stream=not args.no_save_stream,  # Enabled by default
-            forensic_mode=args.forensic
+            forensic_mode=not args.no_forensic  # Enabled by default
         )
 
         if data is not None and not data.empty:
