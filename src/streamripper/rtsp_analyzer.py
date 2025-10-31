@@ -153,8 +153,21 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             frames = []
             try:
                 frames = list(packet.decode())
-            except (av.InvalidDataError, av.EOFError) as decode_error:
-                # Capture PyAV-specific corruption errors
+            except (av.InvalidDataError, av.EOFError, av.ExternalError,
+                    av.BugError, av.BufferTooSmallError) as decode_error:
+                # Capture PyAV-specific corruption and decoding errors
+                if forensic_mode:
+                    corrupted_packets.append({
+                        'packet_index': len(packets) + len(corrupted_packets),
+                        'timestamp': packet.pts if packet.pts else 'unknown',
+                        'size': packet.size,
+                        'error': str(decode_error),
+                        'error_type': type(decode_error).__name__,
+                        'packet_data': None
+                    })
+                continue
+            except av.FFmpegError as decode_error:
+                # Catch other FFmpeg errors
                 if forensic_mode:
                     corrupted_packets.append({
                         'packet_index': len(packets) + len(corrupted_packets),
@@ -343,11 +356,23 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         report_lines.append(f"Total corrupted packets detected: {len(corrupted_packets)}")
         report_lines.append("")
 
+        # Error type descriptions
+        error_descriptions = {
+            'InvalidDataError': 'Invalid data found when processing input (H.264 bitstream corruption)',
+            'EOFError': 'End of file reached unexpectedly',
+            'ExternalError': 'Generic error in external library (FFmpeg)',
+            'BugError': 'Internal bug in FFmpeg decoder',
+            'BufferTooSmallError': 'Buffer too small for decoded data',
+            'NoFramesDecoded': 'Packet produced no decoded frames (silent corruption)',
+        }
+
         # Group errors by type
         error_types = Counter([p['error_type'] for p in corrupted_packets])
         report_lines.append("Corruption Types:")
         for error_type, count in error_types.items():
+            description = error_descriptions.get(error_type, error_type)
             report_lines.append(f"  - {error_type}: {count} occurrences")
+            report_lines.append(f"    ({description})")
 
         report_lines.append("")
         report_lines.append("Detailed Corruption Events:")
