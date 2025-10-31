@@ -1,0 +1,64 @@
+# Streamripper Configuration Example
+# This file shows various configuration options for streamripper
+
+# Default analysis settings
+analysis:
+  duration: 60  # seconds
+  output_dir: "./output"
+  debug_log: true
+  timestamp_prefix: "analysis"
+
+# Stream settings
+streams:
+  # Example streams (replace with your actual RTSP URLs)
+  primary:
+    url: "rtsp://example.com/primary"
+    name: "Primary Camera"
+    description: "Main entrance camera"
+  
+  secondary:
+    url: "rtsp://example.com/secondary"
+    name: "Secondary Camera"
+    description: "Parking lot camera"
+
+# Chart generation settings
+charts:
+  figure_size: [16, 9]  # width, height in inches
+  dpi: 300
+  format: "png"
+  colors:
+    i_frame: "green"
+    p_frame: "blue"
+    b_frame: "purple"
+    unknown: "gray"
+    frame_size: "blue"
+    time_drift: "red"
+
+# Output settings
+output:
+  csv_export: true
+  chart_generation: true
+  console_report: true
+  file_naming:
+    timestamp_format: "%Y%m%d_%H%M%S"
+    data_suffix: "_data.csv"
+    chart_suffix: "_chart.png"
+    log_suffix: "_debug.log"
+
+# Logging settings
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_logging: true
+
+# Performance settings
+performance:
+  max_concurrent_streams: 3
+  buffer_size: 1024
+  timeout: 30  # seconds
+
+# Quality thresholds
+quality:
+  min_frame_rate: 15  # fps
+  max_time_drift: 100  # milliseconds
+  min_i_frame_interval: 30  # frames

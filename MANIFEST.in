@@ -1,0 +1,28 @@
+# Include the README and license files
+include README.md
+include LICENSE
+
+# Include requirements files
+include requirements.txt
+include requirements-dev.txt
+
+# Include example files
+recursive-include examples *.py *.yaml *.yml
+
+# Include test files
+recursive-include tests *.py
+
+# Exclude development and build artifacts
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude *.so
+global-exclude .DS_Store
+global-exclude *.egg-info
+prune build
+prune dist
+prune .git
+prune .pytest_cache
+prune htmlcov
+prune .coverage
+prune venv
+prune .venv
