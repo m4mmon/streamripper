@@ -386,14 +386,6 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 'Packet Size (bytes)': packet['size']
             })
 
-        # Close output container if it was opened
-        if save_stream and output_container:
-            try:
-                output_container.close()
-                print(f"✓ Stream saved successfully!")
-            except Exception as e:
-                print(f"Warning: Error closing output file: {e}")
-
         # Close stream file if it was opened
         if save_stream and stream_file:
             try:
