@@ -133,35 +133,35 @@ pip install -e .
 ### Command Line Interface
 
 ```bash
-# Analyze an RTSP stream for 30 seconds (default duration)
+# Analyze an RTSP stream (saves stream, debug log, and chart by default)
 streamripper rtsp://example.com/stream
 
-# Analyze an RTSP stream for 60 seconds
+# Analyze for 60 seconds instead of default 30
 streamripper rtsp://example.com/stream --duration 60
 
-# Analyze with custom output directory
+# Minimal output (skip stream saving and debug log)
+streamripper rtsp://example.com/stream --no-save-stream --no-debug-log
+
+# Skip chart generation but keep stream and debug log
+streamripper rtsp://example.com/stream --no-chart
+
+# Custom output directory
 streamripper rtsp://example.com/stream --output-dir ./my_analysis
 
-# Enable debug logging
-streamripper rtsp://example.com/stream --debug-log
-
-# Generate combined chart showing both audio and video time drifts (default)
-streamripper rtsp://example.com/stream --chart-type combined
-
 # Generate separate charts for audio and video
-streamripper rtsp://example.com/stream --duration 60 --chart-type separate
+streamripper rtsp://example.com/stream --chart-type separate
 
 # Generate only video chart
-streamripper rtsp://example.com/stream --duration 60 --chart-type video-only
+streamripper rtsp://example.com/stream --chart-type video-only
 
 # Generate comprehensive chart with all packets and separate drift lines
-streamripper rtsp://example.com/stream --duration 60 --chart-type comprehensive
+streamripper rtsp://example.com/stream --chart-type comprehensive
 
-# Save the unaltered stream for further analysis
-streamripper rtsp://example.com/stream --save-stream --duration 60
+# Enable forensic mode to detect corrupted packets
+streamripper rtsp://example.com/stream --forensic --duration 60
 
-# Combine stream saving with analysis and charts
-streamripper rtsp://example.com/stream --save-stream --debug-log --chart-type comprehensive
+# Forensic analysis with all features enabled
+streamripper rtsp://example.com/stream --forensic --duration 60
 ```
 
 ### Python API
@@ -240,12 +240,13 @@ output/
 ### Command Line Options
 
 - `--duration`: Analysis duration in seconds (default: 30)
-- `--output-dir`: Output directory for results (default: current directory)
-- `--debug-log`: Enable detailed debug logging
+- `--output-dir`: Output directory for results (default: ./output)
+- `--no-debug-log`: Disable debug flow logging (enabled by default)
+- `--no-save-stream`: Disable raw bitstream saving (enabled by default)
 - `--timestamp-prefix`: Custom prefix for output files
-- `--chart-type`: Type of chart to generate (combined, comprehensive, separate, video-only, audio-only)
+- `--chart-type`: Type of chart to generate (combined, comprehensive, separate, video-only, audio-only) (default: combined)
 - `--no-chart`: Skip chart generation entirely
-- `--save-stream`: Save the unaltered raw bitstream (H.264/H.265) for further analysis
+- `--forensic`: Enable forensic mode to detect and extract corrupted packets
 
 ## Development
 

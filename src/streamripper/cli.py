@@ -22,12 +22,13 @@ def create_parser():
         epilog="""
 Examples:
   streamripper rtsp://example.com/stream
+    (saves stream, debug log, and chart by default)
   streamripper rtsp://example.com/stream --duration 60
-  streamripper rtsp://example.com/stream --output-dir ./analysis
-  streamripper rtsp://example.com/stream --duration 60 --debug-log --timestamp-prefix test
-  streamripper rtsp://example.com/stream --save-stream --duration 60
+  streamripper rtsp://example.com/stream --no-save-stream --no-debug-log
+    (minimal output, only chart and report)
   streamripper rtsp://example.com/stream --forensic --duration 60
-  streamripper rtsp://example.com/stream --forensic --save-stream --duration 60
+  streamripper rtsp://example.com/stream --no-chart --duration 60
+    (skip chart generation, keep stream and debug log)
         """
     )
     
@@ -51,9 +52,9 @@ Examples:
     )
     
     parser.add_argument(
-        "--debug-log",
+        "--no-debug-log",
         action="store_true",
-        help="Enable detailed debug logging"
+        help="Disable debug flow logging (enabled by default)"
     )
     
     parser.add_argument(
@@ -77,9 +78,9 @@ Examples:
     )
 
     parser.add_argument(
-        "--save-stream",
+        "--no-save-stream",
         action="store_true",
-        help="Save the unaltered raw stream to file for further analysis"
+        help="Disable raw bitstream saving (enabled by default)"
     )
 
     parser.add_argument(
@@ -114,9 +115,9 @@ def main():
     print(f"Stream URL: {args.rtsp_url}")
     print(f"Duration: {args.duration} seconds")
     print(f"Output directory: {args.output_dir}")
-    print(f"Debug logging: {'enabled' if args.debug_log else 'disabled'}")
+    print(f"Debug logging: {'disabled' if args.no_debug_log else 'enabled'}")
     print(f"Chart generation: {'disabled' if args.no_chart else f'enabled ({args.chart_type})'}")
-    print(f"Stream saving: {'enabled' if args.save_stream else 'disabled'}")
+    print(f"Stream saving: {'disabled' if args.no_save_stream else 'enabled'}")
     print(f"Forensic mode: {'enabled' if args.forensic else 'disabled'}")
     print(f"Timestamp prefix: {args.timestamp_prefix}")
     print("-" * 40)
@@ -128,9 +129,9 @@ def main():
             rtsp_url=args.rtsp_url,
             duration=args.duration,
             output_dir=args.output_dir,
-            debug_log=args.debug_log,
+            debug_log=not args.no_debug_log,  # Enabled by default
             timestamp_prefix=args.timestamp_prefix,
-            save_stream=args.save_stream,
+            save_stream=not args.no_save_stream,  # Enabled by default
             forensic_mode=args.forensic
         )
 
