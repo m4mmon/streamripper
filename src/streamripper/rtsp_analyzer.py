@@ -150,23 +150,11 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 pass
 
         if packet.stream.type == 'video':
+            frames = []
             try:
                 frames = list(packet.decode())
-
-                # Check if frames were actually decoded (forensic check)
-                if forensic_mode and len(frames) == 0 and packet.size > 0:
-                    # Packet had data but produced no frames - likely corruption
-                    corrupted_packets.append({
-                        'packet_index': len(packets) + len(corrupted_packets),
-                        'timestamp': packet.pts if packet.pts else 'unknown',
-                        'size': packet.size,
-                        'error': 'Packet produced no decoded frames',
-                        'error_type': 'NoFramesDecoded',
-                        'packet_data': None
-                    })
-
-            except Exception as decode_error:
-                # Capture corruption information
+            except (av.InvalidDataError, av.EOFError) as decode_error:
+                # Capture PyAV-specific corruption errors
                 if forensic_mode:
                     corrupted_packets.append({
                         'packet_index': len(packets) + len(corrupted_packets),
@@ -177,6 +165,30 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                         'packet_data': None
                     })
                 continue
+            except Exception as decode_error:
+                # Catch other unexpected errors
+                if forensic_mode:
+                    corrupted_packets.append({
+                        'packet_index': len(packets) + len(corrupted_packets),
+                        'timestamp': packet.pts if packet.pts else 'unknown',
+                        'size': packet.size,
+                        'error': str(decode_error),
+                        'error_type': type(decode_error).__name__,
+                        'packet_data': None
+                    })
+                continue
+
+            # Check if frames were actually decoded (forensic check)
+            if forensic_mode and len(frames) == 0 and packet.size > 0:
+                # Packet had data but produced no frames - likely corruption
+                corrupted_packets.append({
+                    'packet_index': len(packets) + len(corrupted_packets),
+                    'timestamp': packet.pts if packet.pts else 'unknown',
+                    'size': packet.size,
+                    'error': 'Packet produced no decoded frames',
+                    'error_type': 'NoFramesDecoded',
+                    'packet_data': None
+                })
 
             for frame in frames:
                 if frame.pts is None:
