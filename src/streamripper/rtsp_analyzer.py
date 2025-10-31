@@ -28,10 +28,10 @@ def _get_h264_frame_type(packet_data):
         packet_data (bytes): Raw H.264 packet data
 
     Returns:
-        str: Frame type description or "Unknown"
+        tuple: (frame_type_str, nal_type_int, start_offset)
     """
     if len(packet_data) < 4:
-        return "Unknown (too small)"
+        return ("Unknown (too small)", None, -1)
 
     try:
         # Look for start code (00 00 00 01 or 00 00 01)
@@ -51,7 +51,7 @@ def _get_h264_frame_type(packet_data):
                     break
 
         if start_idx == -1 or start_idx >= len(packet_data):
-            return "Unknown (no start code)"
+            return ("Unknown (no start code)", None, -1)
 
         # Extract NAL unit type (lower 5 bits of first byte after start code)
         nal_byte = packet_data[start_idx]
@@ -71,11 +71,12 @@ def _get_h264_frame_type(packet_data):
             11: "End of Stream",
         }
 
-        return frame_types.get(nal_type, f"Unknown NAL type {nal_type}")
+        frame_type_str = frame_types.get(nal_type, f"Unknown NAL type {nal_type}")
+        return (frame_type_str, nal_type, start_idx - 4 if start_idx >= 4 else 0)
     except Exception as e:
-        return f"Error detecting frame type: {e}"
+        return (f"Error detecting frame type: {e}", None, -1)
 
-def _save_hex_dump(hex_dump_dir, packet_index, packet_data, frame_type=None):
+def _save_hex_dump(hex_dump_dir, packet_index, packet_data, frame_type_info=None):
     """
     Save packet data as a hex dump file for forensic analysis.
 
@@ -83,7 +84,7 @@ def _save_hex_dump(hex_dump_dir, packet_index, packet_data, frame_type=None):
         hex_dump_dir (str): Directory to save hex dumps
         packet_index (int): Index of the packet
         packet_data (bytes): Raw packet data
-        frame_type (str): Optional frame type description
+        frame_type_info (tuple): Optional (frame_type_str, nal_type, offset)
     """
     try:
         filename = os.path.join(hex_dump_dir, f"frame{packet_index:04d}.hex")
@@ -91,9 +92,16 @@ def _save_hex_dump(hex_dump_dir, packet_index, packet_data, frame_type=None):
             # Write header
             f.write(f"Packet Index: {packet_index}\n")
             f.write(f"Packet Size: {len(packet_data)} bytes\n")
-            if frame_type is None:
-                frame_type = _get_h264_frame_type(packet_data)
-            f.write(f"Frame Type: {frame_type}\n")
+
+            if frame_type_info is None:
+                frame_type_info = _get_h264_frame_type(packet_data)
+
+            frame_type_str, nal_type, start_offset = frame_type_info
+            f.write(f"Frame Type: {frame_type_str}\n")
+            if nal_type is not None:
+                f.write(f"NAL Type: {nal_type}\n")
+            if start_offset >= 0:
+                f.write(f"Start Code Offset: {start_offset}\n")
             f.write(f"Generated: {datetime.now().isoformat()}\n")
             f.write("=" * 80 + "\n\n")
 
@@ -268,57 +276,60 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 if forensic_mode:
                     packet_index = len(packets) + len(corrupted_packets)
                     packet_bytes = bytes(packet)
-                    frame_type = _get_h264_frame_type(packet_bytes)
+                    frame_type_info = _get_h264_frame_type(packet_bytes)
+                    frame_type_str = frame_type_info[0]  # Just the string for the dict
                     corrupted_packets.append({
                         'packet_index': packet_index,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'frame_type': frame_type,
+                        'frame_type': frame_type_str,
                         'packet_data': packet_bytes
                     })
                     # Save hex dump of corrupted packet
                     if hex_dump_dir:
-                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type)
+                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
                 continue
             except av.FFmpegError as decode_error:
                 # Catch other FFmpeg errors
                 if forensic_mode:
                     packet_index = len(packets) + len(corrupted_packets)
                     packet_bytes = bytes(packet)
-                    frame_type = _get_h264_frame_type(packet_bytes)
+                    frame_type_info = _get_h264_frame_type(packet_bytes)
+                    frame_type_str = frame_type_info[0]
                     corrupted_packets.append({
                         'packet_index': packet_index,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'frame_type': frame_type,
+                        'frame_type': frame_type_str,
                         'packet_data': packet_bytes
                     })
                     # Save hex dump of corrupted packet
                     if hex_dump_dir:
-                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type)
+                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
                 continue
             except Exception as decode_error:
                 # Catch other unexpected errors
                 if forensic_mode:
                     packet_index = len(packets) + len(corrupted_packets)
                     packet_bytes = bytes(packet)
-                    frame_type = _get_h264_frame_type(packet_bytes)
+                    frame_type_info = _get_h264_frame_type(packet_bytes)
+                    frame_type_str = frame_type_info[0]
                     corrupted_packets.append({
                         'packet_index': packet_index,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'frame_type': frame_type,
+                        'frame_type': frame_type_str,
                         'packet_data': packet_bytes
                     })
                     # Save hex dump of corrupted packet
                     if hex_dump_dir:
-                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type)
+                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
                 continue
 
             # Check if frames were actually decoded (forensic check)
@@ -326,19 +337,20 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 # Packet had data but produced no frames - likely corruption
                 packet_index = len(packets) + len(corrupted_packets)
                 packet_bytes = bytes(packet)
-                frame_type = _get_h264_frame_type(packet_bytes)
+                frame_type_info = _get_h264_frame_type(packet_bytes)
+                frame_type_str = frame_type_info[0]
                 corrupted_packets.append({
                     'packet_index': packet_index,
                     'timestamp': packet.pts if packet.pts else 'unknown',
                     'size': packet.size,
                     'error': 'Packet produced no decoded frames',
                     'error_type': 'NoFramesDecoded',
-                    'frame_type': frame_type,
+                    'frame_type': frame_type_str,
                     'packet_data': packet_bytes
                 })
                 # Save hex dump of corrupted packet
                 if hex_dump_dir:
-                    _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type)
+                    _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
 
             for frame in frames:
                 if frame.pts is None:
