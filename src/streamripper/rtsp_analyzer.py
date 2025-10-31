@@ -76,6 +76,11 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             f.write(report)
         return None
 
+    video_stream = container.streams.video[0]
+    audio_stream = None
+    if container.streams.audio:
+        audio_stream = container.streams.audio[0]
+
     # Set up stream saving if requested
     output_container = None
     stream_filename = None
@@ -85,19 +90,22 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             output_container = av.open(stream_filename, 'w')
             print(f"Stream will be saved to: {stream_filename}")
 
-            # Add streams to output container
-            for stream in container.streams:
-                if stream.type == 'video' or stream.type == 'audio':
-                    output_container.add_stream(template=stream)
+            # Add video stream to output container
+            video_codec = video_stream.codec_context.name
+            out_video = output_container.add_stream(video_codec)
+            out_video.width = video_stream.codec_context.width
+            out_video.height = video_stream.codec_context.height
+
+            # Add audio stream if present
+            if audio_stream:
+                audio_codec = audio_stream.codec_context.name
+                out_audio = output_container.add_stream(audio_codec)
+                out_audio.rate = audio_stream.codec_context.sample_rate
+
         except Exception as e:
             print(f"Warning: Could not create output file for stream saving: {e}")
             save_stream = False
             output_container = None
-
-    video_stream = container.streams.video[0]
-    audio_stream = None
-    if container.streams.audio:
-        audio_stream = container.streams.audio[0]
 
     packets = []
     start_time = time.time()
