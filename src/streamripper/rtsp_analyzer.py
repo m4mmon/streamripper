@@ -152,6 +152,19 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         if packet.stream.type == 'video':
             try:
                 frames = list(packet.decode())
+
+                # Check if frames were actually decoded (forensic check)
+                if forensic_mode and len(frames) == 0 and packet.size > 0:
+                    # Packet had data but produced no frames - likely corruption
+                    corrupted_packets.append({
+                        'packet_index': len(packets) + len(corrupted_packets),
+                        'timestamp': packet.pts if packet.pts else 'unknown',
+                        'size': packet.size,
+                        'error': 'Packet produced no decoded frames',
+                        'error_type': 'NoFramesDecoded',
+                        'packet_data': None
+                    })
+
             except Exception as decode_error:
                 # Capture corruption information
                 if forensic_mode:
@@ -161,7 +174,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                         'size': packet.size,
                         'error': str(decode_error),
                         'error_type': type(decode_error).__name__,
-                        'packet_data': packet.to_bytes() if hasattr(packet, 'to_bytes') else None
+                        'packet_data': None
                     })
                 continue
 
