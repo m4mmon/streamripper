@@ -43,7 +43,8 @@ def main():
             duration=duration,
             output_dir=output_dir,
             debug_log=True,
-            timestamp_prefix=timestamp_prefix
+            timestamp_prefix=timestamp_prefix,
+            save_stream=False  # Set to True to save raw stream
         )
         
         if data is not None and not data.empty:

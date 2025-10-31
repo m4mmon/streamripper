@@ -156,6 +156,12 @@ streamripper rtsp://example.com/stream --duration 60 --chart-type video-only
 
 # Generate comprehensive chart with all packets and separate drift lines
 streamripper rtsp://example.com/stream --duration 60 --chart-type comprehensive
+
+# Save the unaltered stream for further analysis
+streamripper rtsp://example.com/stream --save-stream --duration 60
+
+# Combine stream saving with analysis and charts
+streamripper rtsp://example.com/stream --save-stream --debug-log --chart-type comprehensive
 ```
 
 ### Python API
@@ -169,7 +175,8 @@ data = analyze_rtsp_stream(
     duration=60,
     output_dir="./output",
     debug_log=True,
-    timestamp_prefix="analysis"
+    timestamp_prefix="analysis",
+    save_stream=True  # Save raw stream for further analysis
 )
 
 # Generate combined visualization showing both audio and video time drifts
@@ -193,6 +200,7 @@ Streamripper generates several types of output:
    - **Audio-only Chart**: Focus on audio stream analysis
 3. **Console Report**: Summary statistics and analysis results
 4. **Debug Logs**: Detailed logging information (when enabled)
+5. **Raw Stream File**: Unaltered MP4 stream file (when `--save-stream` is used)
 
 ### Organized Output Structure
 
@@ -203,11 +211,13 @@ output/
 └── rtsp_192_168_88_33_ch0/          # Sanitized URL directory
     ├── analysis_20231031_143022_flow.csv
     ├── analysis_20231031_143022_chart_comprehensive.png
-    └── analysis_20231031_143022_report.txt
+    ├── analysis_20231031_143022_report.txt
+    └── analysis_20231031_143022_stream.mp4  # Raw stream (when --save-stream used)
 └── rtsp_camera_example_com_554_stream/  # Another stream
     ├── analysis_20231031_150000_flow.csv
     ├── analysis_20231031_150000_chart_combined.png
-    └── analysis_20231031_150000_report.txt
+    ├── analysis_20231031_150000_report.txt
+    └── analysis_20231031_150000_stream.mp4  # Raw stream (when --save-stream used)
 ```
 
 **Directory Naming:**
@@ -231,6 +241,7 @@ output/
 - `--timestamp-prefix`: Custom prefix for output files
 - `--chart-type`: Type of chart to generate (combined, comprehensive, separate, video-only, audio-only)
 - `--no-chart`: Skip chart generation entirely
+- `--save-stream`: Save the unaltered raw stream to MP4 file for further analysis
 
 ## Development
 

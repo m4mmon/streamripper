@@ -44,7 +44,7 @@ def sanitize_url_for_filename(url):
 
     return f"rtsp_{sanitized}"
 
-def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_prefix):
+def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_prefix, save_stream=False):
     """
     Analyzes an RTSP stream for a given duration and generates a report.
 
@@ -54,6 +54,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         output_dir (str): Base directory to save output files.
         debug_log (bool): Whether to enable per-frame debug logging.
         timestamp_prefix (str): Prefix for output files based on timestamp.
+        save_stream (bool): Whether to save the unaltered raw stream to file.
 
     Returns:
         pandas.DataFrame: Analysis data with packet information, or None if failed.
@@ -65,6 +66,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     sanitized_url = sanitize_url_for_filename(rtsp_url)
     stream_output_dir = os.path.join(output_dir, sanitized_url)
     os.makedirs(stream_output_dir, exist_ok=True)
+
     try:
         container = av.open(rtsp_url, timeout=10)
     except av.AVError as e:
@@ -74,10 +76,37 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             f.write(report)
         return None
 
+    # Set up stream saving if requested
+    output_container = None
+    if save_stream:
+        stream_filename = os.path.join(stream_output_dir, f"{timestamp_prefix}_stream.mp4")
+        try:
+            output_container = av.open(stream_filename, 'w')
+            print(f"Stream will be saved to: {stream_filename}")
+        except av.AVError as e:
+            print(f"Warning: Could not create output file for stream saving: {e}")
+            save_stream = False
+
     video_stream = container.streams.video[0]
     audio_stream = None
     if container.streams.audio:
         audio_stream = container.streams.audio[0]
+
+    # Set up output streams for saving if requested
+    output_video_stream = None
+    output_audio_stream = None
+    if save_stream and output_container:
+        try:
+            # Copy video stream
+            output_video_stream = output_container.add_stream(template=video_stream)
+
+            # Copy audio stream if present
+            if audio_stream:
+                output_audio_stream = output_container.add_stream(template=audio_stream)
+
+        except av.AVError as e:
+            print(f"Warning: Could not set up output streams: {e}")
+            save_stream = False
 
     packets = []
     start_time = time.time()
@@ -110,6 +139,19 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     for packet in container.demux(streams_to_demux):
         if (time.time() - start_time) > duration:
             break
+
+        # Save packet to output file if stream saving is enabled
+        if save_stream and output_container:
+            try:
+                if packet.stream.type == 'video' and output_video_stream:
+                    packet.stream = output_video_stream
+                    output_container.mux(packet)
+                elif packet.stream.type == 'audio' and output_audio_stream:
+                    packet.stream = output_audio_stream
+                    output_container.mux(packet)
+            except av.AVError as e:
+                # Continue analysis even if saving fails
+                print(f"Warning: Could not save packet: {e}")
 
         if packet.stream.type == 'video':
             for frame in packet.decode():
@@ -285,9 +327,25 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 'Packet Size (bytes)': packet['size']
             })
 
+        # Close output container if it was opened
+        if save_stream and output_container:
+            try:
+                output_container.close()
+                print(f"✓ Stream saved successfully!")
+            except av.AVError as e:
+                print(f"Warning: Error closing output file: {e}")
+
         container.close()
         return pd.DataFrame(df_data)
     else:
+        # Close output container if it was opened
+        if save_stream and output_container:
+            try:
+                output_container.close()
+                print(f"✓ Stream saved (no analysis data collected)")
+            except av.AVError as e:
+                print(f"Warning: Error closing output file: {e}")
+
         container.close()
         return None
 

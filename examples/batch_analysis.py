@@ -48,7 +48,8 @@ def analyze_multiple_streams(streams, duration=30, output_base_dir="./batch_outp
                 duration=duration,
                 output_dir=output_dir,
                 debug_log=True,
-                timestamp_prefix=timestamp_prefix
+                timestamp_prefix=timestamp_prefix,
+                save_stream=False  # Set to True to save raw streams
             )
             
             if data is not None and not data.empty:

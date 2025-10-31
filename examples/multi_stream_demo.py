@@ -58,7 +58,8 @@ def analyze_multiple_streams_demo():
                 duration=duration,
                 output_dir=base_output_dir,  # Base dir - function creates organized subdirs
                 debug_log=True,
-                timestamp_prefix=timestamp_prefix
+                timestamp_prefix=timestamp_prefix,
+                save_stream=True  # Save raw stream for demo purposes
             )
             
             if data is not None and not data.empty:
