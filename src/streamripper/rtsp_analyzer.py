@@ -571,12 +571,17 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     # Wait for FFmpeg raw capture to complete
     if ffmpeg_thread:
         print("Waiting for FFmpeg raw stream capture to complete...")
-        ffmpeg_thread.join(timeout=duration + 20)
+        ffmpeg_thread.join(timeout=duration + 30)
         if ffmpeg_thread.is_alive():
-            print("Warning: FFmpeg capture thread still running")
-        elif raw_stream_ts and os.path.exists(raw_stream_ts):
+            print("Warning: FFmpeg capture thread still running, waiting more...")
+            ffmpeg_thread.join(timeout=30)
+
+        if raw_stream_ts and os.path.exists(raw_stream_ts):
             file_size = os.path.getsize(raw_stream_ts)
-            print(f"✓ Raw stream captured by FFmpeg! ({file_size} bytes)")
+            if file_size > 0:
+                print(f"✓ Raw stream captured by FFmpeg! ({file_size} bytes)")
+            else:
+                print(f"Warning: FFmpeg output file is empty")
 
     # Close stream files
     if log_file:
