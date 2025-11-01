@@ -265,6 +265,21 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             print(f"Warning: Could not create video stream file: {e}")
             video_stream_file = None
 
+    # Also save audio-only stream for reference
+    audio_stream_file = None
+    audio_stream_filename = None
+    if save_stream and audio_stream:
+        # Determine audio codec and file extension
+        audio_codec = audio_stream.codec_context.name
+        audio_stream_filename = os.path.join(stream_output_dir, f"stream.{audio_codec}")
+
+        try:
+            audio_stream_file = open(audio_stream_filename, 'wb')
+            print(f"Audio stream will be saved to: {audio_stream_filename}")
+        except Exception as e:
+            print(f"Warning: Could not create audio stream file: {e}")
+            audio_stream_file = None
+
     packets = []
     corrupted_packets = []  # Track corrupted packets for forensic analysis
     start_time = time.time()
@@ -332,6 +347,15 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         elif packet.stream.type == 'audio':
             # Audio packet: calculate offset based on last video offset + accumulated audio
             packet_stream_offset = last_video_offset + audio_offset_accumulator
+
+            # Save audio packet to audio-only stream
+            if save_stream and audio_stream_file:
+                try:
+                    packet_bytes = bytes(packet)
+                    audio_stream_file.write(packet_bytes)
+                except Exception as e:
+                    pass
+
             # Accumulate this audio packet size for next audio packets
             audio_offset_accumulator += packet.size
 
@@ -514,6 +538,14 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             print(f"✓ Video stream saved successfully! ({file_size} bytes)")
         except Exception as e:
             print(f"Warning: Error closing video stream file: {e}")
+
+    if save_stream and audio_stream_file:
+        try:
+            audio_stream_file.close()
+            file_size = os.path.getsize(audio_stream_filename)
+            print(f"✓ Audio stream saved successfully! ({file_size} bytes)")
+        except Exception as e:
+            print(f"Warning: Error closing audio stream file: {e}")
 
     # Sort packets by wall clock time
     packets.sort(key=lambda p: p['wall_clock'])
