@@ -106,9 +106,9 @@ def _capture_raw_stream_parallel(rtsp_url, output_file, duration):
                 output_file
             ]
 
-            # Run FFmpeg without output redirection to avoid hanging
-            # Use DEVNULL for both stdout and stderr
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=duration + 60)
+            # Run FFmpeg directly without output capture
+            # This avoids hanging issues with subprocess output redirection
+            subprocess.run(cmd, timeout=duration + 60)
         except subprocess.TimeoutExpired:
             pass  # Expected - FFmpeg will stop after duration
         except Exception as e:
