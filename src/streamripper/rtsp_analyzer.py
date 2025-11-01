@@ -266,29 +266,36 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     if audio_stream:
         streams_to_demux.append(audio_stream)
 
-    # Track cumulative stream offset (both video and audio packets move the needle)
-    cumulative_stream_offset = 0
+    # Track stream offsets
+    # For video: use actual offset from PyAV (when we save to file)
+    # For audio: calculate based on last known video offset + accumulated audio sizes
+    last_video_offset = 0
+    audio_offset_accumulator = 0  # Accumulate audio sizes between video packets
 
     for packet in container.demux(streams_to_demux):
         if (time.time() - start_time) > duration:
             break
 
-        # Record offset at the start of this packet
-        packet_stream_offset = cumulative_stream_offset
+        if packet.stream.type == 'video':
+            # Video packet: use actual file offset
+            packet_stream_offset = last_video_offset + audio_offset_accumulator
 
-        # Save raw packet data if stream saving is enabled
-        if save_stream and stream_file and packet.stream.type == 'video':
-            try:
-                packet_bytes = bytes(packet)
-                stream_file.write(packet_bytes)
-                cumulative_stream_offset += len(packet_bytes)
-            except Exception as e:
-                # Continue analysis even if saving fails
-                pass
-
-        # Update offset for audio packets too (they're part of the interleaved stream)
-        if packet.stream.type == 'audio':
-            cumulative_stream_offset += packet.size
+            # Save raw packet data if stream saving is enabled
+            if save_stream and stream_file:
+                try:
+                    packet_bytes = bytes(packet)
+                    stream_file.write(packet_bytes)
+                    # Update last video offset for next audio packets
+                    last_video_offset = packet_stream_offset + len(packet_bytes)
+                    audio_offset_accumulator = 0  # Reset audio accumulator
+                except Exception as e:
+                    # Continue analysis even if saving fails
+                    pass
+        elif packet.stream.type == 'audio':
+            # Audio packet: calculate offset based on last video offset + accumulated audio
+            packet_stream_offset = last_video_offset + audio_offset_accumulator
+            # Accumulate this audio packet size for next audio packets
+            audio_offset_accumulator += packet.size
 
         if packet.stream.type == 'video':
             frames = []
