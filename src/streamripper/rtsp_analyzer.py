@@ -266,19 +266,28 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     if audio_stream:
         streams_to_demux.append(audio_stream)
 
+    # Track separate offsets for video and audio streams
+    video_stream_offset = 0
+    audio_stream_offset = 0
+
     for packet in container.demux(streams_to_demux):
         if (time.time() - start_time) > duration:
             break
 
-        # Track stream offset for video packets (for hex dump filenames)
-        packet_stream_offset = stream_byte_offset if packet.stream.type == 'video' else -1
+        # Track stream offset for each packet type
+        if packet.stream.type == 'video':
+            packet_stream_offset = video_stream_offset
+        elif packet.stream.type == 'audio':
+            packet_stream_offset = audio_stream_offset
+        else:
+            packet_stream_offset = -1
 
         # Save raw packet data if stream saving is enabled
         if save_stream and stream_file and packet.stream.type == 'video':
             try:
                 packet_bytes = bytes(packet)
                 stream_file.write(packet_bytes)
-                stream_byte_offset += len(packet_bytes)
+                video_stream_offset += len(packet_bytes)
             except Exception as e:
                 # Continue analysis even if saving fails
                 pass
@@ -428,7 +437,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 packets.append({
                     'type': 'A',
                     'wall_clock': audio_wall_clock_ms,
-                    'stream_offset': -1,  # Audio packets don't have stream offset tracking
+                    'stream_offset': packet_stream_offset,  # Track audio stream offset
                     'packet_number': len(packets),
                     'timestamp': timestamp,
                     'size': packet.size,
@@ -437,7 +446,13 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
                 if log_file:
                     packet_num = len(packets)
-                    log_file.write(f"{audio_wall_clock_ms:.2f},N/A,-1,{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
+                    if packet_stream_offset >= 0:
+                        log_file.write(f"{audio_wall_clock_ms:.2f},0x{packet_stream_offset:08x},{packet_stream_offset},{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
+                    else:
+                        log_file.write(f"{audio_wall_clock_ms:.2f},N/A,-1,{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
+
+                # Track audio stream offset
+                audio_stream_offset += packet.size
 
     end_time = time.time()
     actual_duration = end_time - start_time
