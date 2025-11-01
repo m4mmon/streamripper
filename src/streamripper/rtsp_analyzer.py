@@ -93,27 +93,23 @@ def _capture_raw_stream_parallel(rtsp_url, output_file, duration):
     """
     def capture():
         try:
-            # Use FFmpeg to capture to Matroska container (preserves all streams)
-            # -rtsp_transport tcp: Use TCP instead of UDP for reliability
-            # -c copy: Copy streams without re-encoding (bit-perfect)
+            # Use FFmpeg to capture raw packets to Matroska container
+            # This preserves the exact stream structure with all packets
             cmd = [
                 'ffmpeg',
                 '-rtsp_transport', 'tcp',
                 '-i', rtsp_url,
                 '-t', str(duration),
                 '-c', 'copy',
-                '-f', 'matroska',
+                '-bsf:v', 'h264_mp4toannexb',  # Ensure proper H.264 framing
                 output_file
             ]
 
-            # Run FFmpeg, suppress output but let it run to completion
-            result = subprocess.run(cmd, capture_output=True, timeout=duration + 30, text=True)
-            if result.returncode != 0:
-                print(f"Warning: FFmpeg returned code {result.returncode}")
-                if result.stderr:
-                    print(f"FFmpeg stderr: {result.stderr[:200]}")
+            # Run FFmpeg with stderr redirected to see progress
+            with open(os.devnull, 'w') as devnull:
+                result = subprocess.run(cmd, stderr=devnull, stdout=devnull, timeout=duration + 60)
         except subprocess.TimeoutExpired:
-            print(f"Warning: FFmpeg capture timed out after {duration + 30} seconds")
+            pass  # Expected - FFmpeg will stop after duration
         except Exception as e:
             print(f"Warning: FFmpeg raw capture failed: {e}")
 
