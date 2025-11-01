@@ -76,21 +76,30 @@ def _get_h264_frame_type(packet_data):
     except Exception as e:
         return (f"Error detecting frame type: {e}", None, -1)
 
-def _save_hex_dump(hex_dump_dir, packet_index, packet_data, frame_type_info=None):
+def _save_hex_dump(hex_dump_dir, stream_offset, packet_data, frame_type_info=None):
     """
-    Save packet data as a hex dump file for forensic analysis.
+    Save packet data as hex dump and binary files for forensic analysis.
 
     Args:
         hex_dump_dir (str): Directory to save hex dumps
-        packet_index (int): Index of the packet
+        stream_offset (int): Byte offset in the stream where this packet starts
         packet_data (bytes): Raw packet data
         frame_type_info (tuple): Optional (frame_type_str, nal_type, offset)
     """
     try:
-        filename = os.path.join(hex_dump_dir, f"frame{packet_index:04d}.hex")
-        with open(filename, 'w') as f:
+        # Use hex offset as filename (padded to 8 hex digits)
+        filename_base = f"{stream_offset:08x}"
+        hex_filename = os.path.join(hex_dump_dir, f"{filename_base}.hex")
+        bin_filename = os.path.join(hex_dump_dir, f"{filename_base}.bin")
+
+        # Save binary file
+        with open(bin_filename, 'wb') as f:
+            f.write(packet_data)
+
+        # Save hex dump file
+        with open(hex_filename, 'w') as f:
             # Write header
-            f.write(f"Packet Index: {packet_index}\n")
+            f.write(f"Stream Offset: 0x{stream_offset:08x} ({stream_offset} bytes)\n")
             f.write(f"Packet Size: {len(packet_data)} bytes\n")
 
             if frame_type_info is None:
@@ -112,7 +121,7 @@ def _save_hex_dump(hex_dump_dir, packet_index, packet_data, frame_type_info=None
                 ascii_str = ''.join(chr(b) if 32 <= b < 127 else '.' for b in chunk)
                 f.write(f"{i:08x}  {hex_str:<48}  {ascii_str}\n")
     except Exception as e:
-        print(f"Warning: Could not save hex dump for packet {packet_index}: {e}")
+        print(f"Warning: Could not save hex dump for offset 0x{stream_offset:08x}: {e}")
 
 def sanitize_url_for_filename(url):
     """
@@ -216,12 +225,15 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
     # Set up hex dump directory for corrupted frames if forensic mode enabled
     if forensic_mode:
-        hex_dump_dir = os.path.join(stream_output_dir, "corrupted_frames_hex")
+        hex_dump_dir = os.path.join(stream_output_dir, "corrupted_frames")
         try:
             os.makedirs(hex_dump_dir, exist_ok=True)
         except Exception as e:
-            print(f"Warning: Could not create hex dump directory: {e}")
+            print(f"Warning: Could not create corrupted frames directory: {e}")
             hex_dump_dir = None
+
+    # Track byte offset in stream for hex dump filenames
+    stream_byte_offset = 0
 
     packets = []
     corrupted_packets = []  # Track corrupted packets for forensic analysis
@@ -258,10 +270,15 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         if (time.time() - start_time) > duration:
             break
 
+        # Track stream offset for video packets (for hex dump filenames)
+        packet_stream_offset = stream_byte_offset if packet.stream.type == 'video' else -1
+
         # Save raw packet data if stream saving is enabled
         if save_stream and stream_file and packet.stream.type == 'video':
             try:
-                stream_file.write(bytes(packet))
+                packet_bytes = bytes(packet)
+                stream_file.write(packet_bytes)
+                stream_byte_offset += len(packet_bytes)
             except Exception as e:
                 # Continue analysis even if saving fails
                 pass
@@ -280,6 +297,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                     frame_type_str = frame_type_info[0]  # Just the string for the dict
                     corrupted_packets.append({
                         'packet_index': packet_index,
+                        'stream_offset': packet_stream_offset,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
@@ -288,8 +306,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                         'packet_data': packet_bytes
                     })
                     # Save hex dump of corrupted packet
-                    if hex_dump_dir:
-                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
+                    if hex_dump_dir and packet_stream_offset >= 0:
+                        _save_hex_dump(hex_dump_dir, packet_stream_offset, packet_bytes, frame_type_info)
                 continue
             except av.FFmpegError as decode_error:
                 # Catch other FFmpeg errors
@@ -300,6 +318,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                     frame_type_str = frame_type_info[0]
                     corrupted_packets.append({
                         'packet_index': packet_index,
+                        'stream_offset': packet_stream_offset,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
@@ -308,8 +327,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                         'packet_data': packet_bytes
                     })
                     # Save hex dump of corrupted packet
-                    if hex_dump_dir:
-                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
+                    if hex_dump_dir and packet_stream_offset >= 0:
+                        _save_hex_dump(hex_dump_dir, packet_stream_offset, packet_bytes, frame_type_info)
                 continue
             except Exception as decode_error:
                 # Catch other unexpected errors
@@ -320,6 +339,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                     frame_type_str = frame_type_info[0]
                     corrupted_packets.append({
                         'packet_index': packet_index,
+                        'stream_offset': packet_stream_offset,
                         'timestamp': packet.pts if packet.pts else 'unknown',
                         'size': packet.size,
                         'error': str(decode_error),
@@ -328,8 +348,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                         'packet_data': packet_bytes
                     })
                     # Save hex dump of corrupted packet
-                    if hex_dump_dir:
-                        _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
+                    if hex_dump_dir and packet_stream_offset >= 0:
+                        _save_hex_dump(hex_dump_dir, packet_stream_offset, packet_bytes, frame_type_info)
                 continue
 
             # Check if frames were actually decoded (forensic check)
@@ -341,6 +361,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 frame_type_str = frame_type_info[0]
                 corrupted_packets.append({
                     'packet_index': packet_index,
+                    'stream_offset': packet_stream_offset,
                     'timestamp': packet.pts if packet.pts else 'unknown',
                     'size': packet.size,
                     'error': 'Packet produced no decoded frames',
@@ -349,8 +370,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                     'packet_data': packet_bytes
                 })
                 # Save hex dump of corrupted packet
-                if hex_dump_dir:
-                    _save_hex_dump(hex_dump_dir, packet_index, packet_bytes, frame_type_info)
+                if hex_dump_dir and packet_stream_offset >= 0:
+                    _save_hex_dump(hex_dump_dir, packet_stream_offset, packet_bytes, frame_type_info)
 
             for frame in frames:
                 if frame.pts is None:
@@ -547,12 +568,17 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             for i, corrupt_pkt in enumerate(corrupted_packets, 1):
                 f.write(f"Corrupted Packet #{i}\n")
                 f.write(f"  Packet Index: {corrupt_pkt['packet_index']}\n")
+                stream_offset = corrupt_pkt.get('stream_offset', -1)
+                if stream_offset >= 0:
+                    f.write(f"  Stream Offset: 0x{stream_offset:08x} ({stream_offset} bytes)\n")
                 f.write(f"  Timestamp (PTS): {corrupt_pkt['timestamp']}\n")
                 f.write(f"  Packet Size: {corrupt_pkt['size']} bytes\n")
                 f.write(f"  Frame Type: {corrupt_pkt.get('frame_type', 'Unknown')}\n")
                 f.write(f"  Error Type: {corrupt_pkt['error_type']}\n")
                 f.write(f"  Error Description: {corrupt_pkt['error']}\n")
-                f.write(f"  Hex Dump: frame{corrupt_pkt['packet_index']:04d}.hex\n")
+                if stream_offset >= 0:
+                    f.write(f"  Hex Dump: {stream_offset:08x}.hex\n")
+                    f.write(f"  Binary: {stream_offset:08x}.bin\n")
                 f.write("-" * 60 + "\n\n")
 
         print(f"Corruption report saved to {corruption_report_path}")
