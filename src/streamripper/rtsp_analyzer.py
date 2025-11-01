@@ -232,8 +232,38 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             print(f"Warning: Could not create corrupted frames directory: {e}")
             hex_dump_dir = None
 
-    # Track byte offset in stream for hex dump filenames
-    stream_byte_offset = 0
+    # Set up raw stream saving (complete unaltered binary from camera)
+    raw_stream_file = None
+    raw_stream_filename = None
+    if save_stream:
+        raw_stream_filename = os.path.join(stream_output_dir, "stream.raw")
+        try:
+            raw_stream_file = open(raw_stream_filename, 'wb')
+            print(f"Raw stream will be saved to: {raw_stream_filename}")
+        except Exception as e:
+            print(f"Warning: Could not create raw stream file: {e}")
+            save_stream = False
+            raw_stream_file = None
+
+    # Also save video-only stream for reference
+    video_stream_file = None
+    video_stream_filename = None
+    if save_stream:
+        # Determine codec and file extension
+        video_codec = video_stream.codec_context.name
+        if video_codec == 'h264':
+            video_stream_filename = os.path.join(stream_output_dir, "stream.h264")
+        elif video_codec == 'hevc':
+            video_stream_filename = os.path.join(stream_output_dir, "stream.h265")
+        else:
+            video_stream_filename = os.path.join(stream_output_dir, f"stream.{video_codec}")
+
+        try:
+            video_stream_file = open(video_stream_filename, 'wb')
+            print(f"Video stream will be saved to: {video_stream_filename}")
+        except Exception as e:
+            print(f"Warning: Could not create video stream file: {e}")
+            video_stream_file = None
 
     packets = []
     corrupted_packets = []  # Track corrupted packets for forensic analysis
@@ -276,15 +306,23 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         if (time.time() - start_time) > duration:
             break
 
+        # Save to raw stream (everything, unaltered)
+        if save_stream and raw_stream_file:
+            try:
+                packet_bytes = bytes(packet)
+                raw_stream_file.write(packet_bytes)
+            except Exception as e:
+                pass
+
         if packet.stream.type == 'video':
             # Video packet: use actual file offset
             packet_stream_offset = last_video_offset + audio_offset_accumulator
 
-            # Save raw packet data if stream saving is enabled
-            if save_stream and stream_file:
+            # Save video packet to video-only stream
+            if save_stream and video_stream_file:
                 try:
                     packet_bytes = bytes(packet)
-                    stream_file.write(packet_bytes)
+                    video_stream_file.write(packet_bytes)
                     # Update last video offset for next audio packets
                     last_video_offset = packet_stream_offset + len(packet_bytes)
                     audio_offset_accumulator = 0  # Reset audio accumulator
@@ -456,9 +494,26 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     end_time = time.time()
     actual_duration = end_time - start_time
 
+    # Close stream files
     if log_file:
         log_file.close()
         print(f"Flow data saved to {os.path.join(stream_output_dir, 'flow.csv')}")
+
+    if save_stream and raw_stream_file:
+        try:
+            raw_stream_file.close()
+            file_size = os.path.getsize(raw_stream_filename)
+            print(f"✓ Raw stream saved successfully! ({file_size} bytes)")
+        except Exception as e:
+            print(f"Warning: Error closing raw stream file: {e}")
+
+    if save_stream and video_stream_file:
+        try:
+            video_stream_file.close()
+            file_size = os.path.getsize(video_stream_filename)
+            print(f"✓ Video stream saved successfully! ({file_size} bytes)")
+        except Exception as e:
+            print(f"Warning: Error closing video stream file: {e}")
 
     # Sort packets by wall clock time
     packets.sort(key=lambda p: p['wall_clock'])
