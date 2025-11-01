@@ -264,25 +264,31 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             print(f"Warning: Could not create corrupted frames directory: {e}")
             hex_dump_dir = None
 
-    # Start FFmpeg capture in background (MP4 container with proper timestamps)
-    ffmpeg_process = None
-    stream_mp4_filename = None
+    # Capture raw H.264 stream using FFmpeg first
+    # This gives us the exact stream that we can then parse
+    raw_h264_temp = os.path.join(stream_output_dir, ".stream_temp.h264")
     if save_stream:
-        stream_mp4_filename = os.path.join(stream_output_dir, "stream.mp4")
-        print(f"Starting FFmpeg capture to: {stream_mp4_filename}")
-        ffmpeg_process = subprocess.Popen(
-            [
-                'ffmpeg',
-                '-rtsp_transport', 'tcp',
-                '-i', rtsp_url,
-                '-t', str(duration),
-                '-c', 'copy',
-                '-f', 'mp4',
-                stream_mp4_filename
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        print(f"Capturing raw H.264 stream to temporary file...")
+        try:
+            subprocess.run(
+                [
+                    'ffmpeg',
+                    '-rtsp_transport', 'tcp',
+                    '-i', rtsp_url,
+                    '-t', str(duration),
+                    '-vcodec', 'copy',
+                    '-an',  # No audio in this dump
+                    '-bsf:v', 'h264_mp4toannexb',
+                    raw_h264_temp
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=duration + 60
+            )
+            print(f"✓ Raw H.264 stream captured ({os.path.getsize(raw_h264_temp)} bytes)")
+        except Exception as e:
+            print(f"Warning: FFmpeg capture failed: {e}")
+            raw_h264_temp = None
 
     # Set up raw stream saving (complete unaltered binary from camera)
     raw_stream_file = None
@@ -549,20 +555,12 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     end_time = time.time()
     actual_duration = end_time - start_time
 
-    # Wait for FFmpeg to complete
-    if ffmpeg_process:
-        print("Waiting for FFmpeg capture to complete...")
+    # Clean up temporary H.264 file
+    if raw_h264_temp and os.path.exists(raw_h264_temp):
         try:
-            ffmpeg_process.wait(timeout=duration + 30)
-            if stream_mp4_filename and os.path.exists(stream_mp4_filename):
-                file_size = os.path.getsize(stream_mp4_filename)
-                if file_size > 0:
-                    print(f"✓ Stream captured by FFmpeg! ({file_size} bytes)")
-                else:
-                    print(f"Warning: FFmpeg output file is empty")
-        except subprocess.TimeoutExpired:
-            print("Warning: FFmpeg capture timed out")
-            ffmpeg_process.kill()
+            os.remove(raw_h264_temp)
+        except Exception as e:
+            print(f"Warning: Could not remove temporary file: {e}")
 
     # Close stream files
     if log_file:
