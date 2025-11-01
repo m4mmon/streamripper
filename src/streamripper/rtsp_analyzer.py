@@ -264,11 +264,11 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
             print(f"Warning: Could not create corrupted frames directory: {e}")
             hex_dump_dir = None
 
-    # Capture raw H.264 stream using FFmpeg first
+    # Capture raw stream using FFmpeg first (video + audio, no re-encoding)
     # This gives us the exact stream that we can then parse
-    raw_h264_temp = os.path.join(stream_output_dir, ".stream_temp.h264")
+    raw_stream_temp = os.path.join(stream_output_dir, ".stream_temp.mkv")
     if save_stream:
-        print(f"Capturing raw H.264 stream to temporary file...")
+        print(f"Capturing raw stream (video + audio) to temporary file...")
         try:
             subprocess.run(
                 [
@@ -277,18 +277,18 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                     '-i', rtsp_url,
                     '-t', str(duration),
                     '-vcodec', 'copy',
-                    '-an',  # No audio in this dump
+                    '-acodec', 'copy',
                     '-bsf:v', 'h264_mp4toannexb',
-                    raw_h264_temp
+                    raw_stream_temp
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=duration + 60
             )
-            print(f"✓ Raw H.264 stream captured ({os.path.getsize(raw_h264_temp)} bytes)")
+            print(f"✓ Raw stream captured ({os.path.getsize(raw_stream_temp)} bytes)")
         except Exception as e:
             print(f"Warning: FFmpeg capture failed: {e}")
-            raw_h264_temp = None
+            raw_stream_temp = None
 
     # Set up raw stream saving (complete unaltered binary from camera)
     raw_stream_file = None
@@ -555,10 +555,10 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     end_time = time.time()
     actual_duration = end_time - start_time
 
-    # Clean up temporary H.264 file
-    if raw_h264_temp and os.path.exists(raw_h264_temp):
+    # Clean up temporary stream file
+    if raw_stream_temp and os.path.exists(raw_stream_temp):
         try:
-            os.remove(raw_h264_temp)
+            os.remove(raw_stream_temp)
         except Exception as e:
             print(f"Warning: Could not remove temporary file: {e}")
 
