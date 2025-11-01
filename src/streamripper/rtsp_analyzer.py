@@ -5,8 +5,37 @@ import os
 import re
 import pandas as pd
 import subprocess
+import threading
 from datetime import datetime
 from collections import Counter
+
+def _capture_stream_ffmpeg(rtsp_url, output_file, duration):
+    """
+    Capture RTSP stream using FFmpeg in a separate process.
+    Saves to MP4 container which preserves timestamps and structure.
+
+    Args:
+        rtsp_url (str): RTSP URL
+        output_file (str): Output file path
+        duration (int): Duration in seconds
+    """
+    try:
+        cmd = [
+            'ffmpeg',
+            '-rtsp_transport', 'tcp',
+            '-i', rtsp_url,
+            '-t', str(duration),
+            '-c', 'copy',
+            '-f', 'mp4',
+            output_file
+        ]
+
+        # Run FFmpeg in subprocess
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=duration + 60)
+    except subprocess.TimeoutExpired:
+        pass  # Expected
+    except Exception as e:
+        print(f"Warning: FFmpeg capture failed: {e}")
 
 def _get_h264_frame_type(packet_data):
     """
@@ -234,6 +263,26 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         except Exception as e:
             print(f"Warning: Could not create corrupted frames directory: {e}")
             hex_dump_dir = None
+
+    # Start FFmpeg capture in background (MP4 container with proper timestamps)
+    ffmpeg_process = None
+    stream_mp4_filename = None
+    if save_stream:
+        stream_mp4_filename = os.path.join(stream_output_dir, "stream.mp4")
+        print(f"Starting FFmpeg capture to: {stream_mp4_filename}")
+        ffmpeg_process = subprocess.Popen(
+            [
+                'ffmpeg',
+                '-rtsp_transport', 'tcp',
+                '-i', rtsp_url,
+                '-t', str(duration),
+                '-c', 'copy',
+                '-f', 'mp4',
+                stream_mp4_filename
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
     # Set up raw stream saving (complete unaltered binary from camera)
     raw_stream_file = None
@@ -500,7 +549,20 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     end_time = time.time()
     actual_duration = end_time - start_time
 
-
+    # Wait for FFmpeg to complete
+    if ffmpeg_process:
+        print("Waiting for FFmpeg capture to complete...")
+        try:
+            ffmpeg_process.wait(timeout=duration + 30)
+            if stream_mp4_filename and os.path.exists(stream_mp4_filename):
+                file_size = os.path.getsize(stream_mp4_filename)
+                if file_size > 0:
+                    print(f"✓ Stream captured by FFmpeg! ({file_size} bytes)")
+                else:
+                    print(f"Warning: FFmpeg output file is empty")
+        except subprocess.TimeoutExpired:
+            print("Warning: FFmpeg capture timed out")
+            ffmpeg_process.kill()
 
     # Close stream files
     if log_file:
