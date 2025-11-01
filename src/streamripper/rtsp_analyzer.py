@@ -255,7 +255,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     if debug_log:
         log_path = os.path.join(stream_output_dir, "flow.csv")
         log_file = open(log_path, "w")
-        log_file.write("Packet,Type,Timestamp (ms),Wall Clock Time (ms),Drift (ms),Packet Size (bytes)\n")
+        log_file.write("Wall Clock Time (ms),Stream Offset (hex),Stream Offset (dec),Packet Number,Type,Packet Size (bytes),Timestamp (ms),Drift (ms)\n")
 
     first_frame_wall_time = None
     first_pts = None
@@ -398,13 +398,16 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 packets.append({
                     'type': frame_type,
                     'wall_clock': wall_clock_ms,
+                    'stream_offset': packet_stream_offset,
+                    'packet_number': len(packets),
                     'timestamp': timestamp,
                     'size': packet.size,
                     'drift': drift
                 })
 
                 if log_file:
-                    log_file.write(f"{len(packets)},{frame_type},{timestamp:.2f},{wall_clock_ms:.2f},{drift:.2f},{packet.size}\n")
+                    packet_num = len(packets)
+                    log_file.write(f"{wall_clock_ms:.2f},0x{packet_stream_offset:08x},{packet_stream_offset},{packet_num},{frame_type},{packet.size},{timestamp:.2f},{drift:.2f}\n")
         elif packet.stream.type == 'audio':
             if packet.pts is not None:
                 current_audio_wall_time = time.time()
@@ -425,6 +428,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 packets.append({
                     'type': 'A',
                     'wall_clock': audio_wall_clock_ms,
+                    'stream_offset': -1,  # Audio packets don't have stream offset tracking
+                    'packet_number': len(packets),
                     'timestamp': timestamp,
                     'size': packet.size,
                     'drift': drift
