@@ -436,7 +436,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 })
 
                 if log_file:
-                    log_file.write(f"{len(packets)},A,{timestamp:.2f},{audio_wall_clock_ms:.2f},{drift:.2f},{packet.size}\n")
+                    packet_num = len(packets)
+                    log_file.write(f"{audio_wall_clock_ms:.2f},N/A,-1,{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
 
     end_time = time.time()
     actual_duration = end_time - start_time
