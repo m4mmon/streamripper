@@ -266,31 +266,29 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     if audio_stream:
         streams_to_demux.append(audio_stream)
 
-    # Track separate offsets for video and audio streams
-    video_stream_offset = 0
-    audio_stream_offset = 0
+    # Track cumulative stream offset (both video and audio packets move the needle)
+    cumulative_stream_offset = 0
 
     for packet in container.demux(streams_to_demux):
         if (time.time() - start_time) > duration:
             break
 
-        # Track stream offset for each packet type
-        if packet.stream.type == 'video':
-            packet_stream_offset = video_stream_offset
-        elif packet.stream.type == 'audio':
-            packet_stream_offset = audio_stream_offset
-        else:
-            packet_stream_offset = -1
+        # Record offset at the start of this packet
+        packet_stream_offset = cumulative_stream_offset
 
         # Save raw packet data if stream saving is enabled
         if save_stream and stream_file and packet.stream.type == 'video':
             try:
                 packet_bytes = bytes(packet)
                 stream_file.write(packet_bytes)
-                video_stream_offset += len(packet_bytes)
+                cumulative_stream_offset += len(packet_bytes)
             except Exception as e:
                 # Continue analysis even if saving fails
                 pass
+
+        # Update offset for audio packets too (they're part of the interleaved stream)
+        if packet.stream.type == 'audio':
+            cumulative_stream_offset += packet.size
 
         if packet.stream.type == 'video':
             frames = []
@@ -437,7 +435,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
                 packets.append({
                     'type': 'A',
                     'wall_clock': audio_wall_clock_ms,
-                    'stream_offset': packet_stream_offset,  # Track audio stream offset
+                    'stream_offset': packet_stream_offset,  # Cumulative offset in interleaved stream
                     'packet_number': len(packets),
                     'timestamp': timestamp,
                     'size': packet.size,
@@ -446,13 +444,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
                 if log_file:
                     packet_num = len(packets)
-                    if packet_stream_offset >= 0:
-                        log_file.write(f"{audio_wall_clock_ms:.2f},0x{packet_stream_offset:08x},{packet_stream_offset},{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
-                    else:
-                        log_file.write(f"{audio_wall_clock_ms:.2f},N/A,-1,{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
-
-                # Track audio stream offset
-                audio_stream_offset += packet.size
+                    log_file.write(f"{audio_wall_clock_ms:.2f},0x{packet_stream_offset:08x},{packet_stream_offset},{packet_num},A,{packet.size},{timestamp:.2f},{drift:.2f}\n")
 
     end_time = time.time()
     actual_duration = end_time - start_time
