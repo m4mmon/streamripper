@@ -4,8 +4,6 @@ import time
 import os
 import re
 import pandas as pd
-import subprocess
-import threading
 from datetime import datetime
 from collections import Counter
 
@@ -77,46 +75,6 @@ def _get_h264_frame_type(packet_data):
         return (frame_type_str, nal_type, start_idx - 4 if start_idx >= 4 else 0)
     except Exception as e:
         return (f"Error detecting frame type: {e}", None, -1)
-
-def _capture_raw_stream_parallel(rtsp_url, output_file, duration):
-    """
-    Capture raw stream from RTSP source using FFmpeg in parallel.
-    This captures the exact bytes as they come from the camera.
-
-    Args:
-        rtsp_url (str): RTSP URL
-        output_file (str): Output file path
-        duration (int): Duration in seconds
-
-    Returns:
-        threading.Thread: Thread object (already started)
-    """
-    def capture():
-        try:
-            # Use FFmpeg to capture to MPEG-TS container
-            # MPEG-TS is ideal for streaming and preserves all packets
-            # -c copy: Copy streams without re-encoding (bit-perfect)
-            cmd = [
-                'ffmpeg',
-                '-rtsp_transport', 'tcp',
-                '-i', rtsp_url,
-                '-t', str(duration),
-                '-c', 'copy',
-                '-f', 'mpegts',
-                output_file
-            ]
-
-            # Run FFmpeg directly without output capture
-            # This avoids hanging issues with subprocess output redirection
-            subprocess.run(cmd, timeout=duration + 60)
-        except subprocess.TimeoutExpired:
-            pass  # Expected - FFmpeg will stop after duration
-        except Exception as e:
-            print(f"Warning: FFmpeg raw capture failed: {e}")
-
-    thread = threading.Thread(target=capture, daemon=False)
-    thread.start()
-    return thread
 
 def _save_hex_dump(hex_dump_dir, stream_offset, packet_data, frame_type_info=None):
     """
@@ -242,13 +200,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     if container.streams.audio:
         audio_stream = container.streams.audio[0]
 
-    # Start parallel FFmpeg capture of raw stream (exact bytes from camera)
-    ffmpeg_thread = None
-    raw_stream_ts = None
-    if save_stream:
-        raw_stream_ts = os.path.join(stream_output_dir, "stream_raw.ts")
-        print(f"Starting parallel FFmpeg capture to: {raw_stream_ts}")
-        ffmpeg_thread = _capture_raw_stream_parallel(rtsp_url, raw_stream_ts, duration)
+
 
     # Set up stream saving if requested
     # Save raw bitstream without muxing to preserve original data
@@ -568,20 +520,7 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
     end_time = time.time()
     actual_duration = end_time - start_time
 
-    # Wait for FFmpeg raw capture to complete
-    if ffmpeg_thread:
-        print("Waiting for FFmpeg raw stream capture to complete...")
-        ffmpeg_thread.join(timeout=duration + 30)
-        if ffmpeg_thread.is_alive():
-            print("Warning: FFmpeg capture thread still running, waiting more...")
-            ffmpeg_thread.join(timeout=30)
 
-        if raw_stream_ts and os.path.exists(raw_stream_ts):
-            file_size = os.path.getsize(raw_stream_ts)
-            if file_size > 0:
-                print(f"✓ Raw stream captured by FFmpeg! ({file_size} bytes)")
-            else:
-                print(f"Warning: FFmpeg output file is empty")
 
     # Close stream files
     if log_file:
