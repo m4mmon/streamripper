@@ -93,21 +93,22 @@ def _capture_raw_stream_parallel(rtsp_url, output_file, duration):
     """
     def capture():
         try:
-            # Use FFmpeg to capture raw packets to Matroska container
-            # This preserves the exact stream structure with all packets
+            # Use FFmpeg to capture to MPEG-TS container
+            # MPEG-TS is ideal for streaming and preserves all packets
+            # -c copy: Copy streams without re-encoding (bit-perfect)
             cmd = [
                 'ffmpeg',
                 '-rtsp_transport', 'tcp',
                 '-i', rtsp_url,
                 '-t', str(duration),
                 '-c', 'copy',
-                '-bsf:v', 'h264_mp4toannexb',  # Ensure proper H.264 framing
+                '-f', 'mpegts',
                 output_file
             ]
 
-            # Run FFmpeg with stderr redirected to see progress
-            with open(os.devnull, 'w') as devnull:
-                result = subprocess.run(cmd, stderr=devnull, stdout=devnull, timeout=duration + 60)
+            # Run FFmpeg without output redirection to avoid hanging
+            # Use DEVNULL for both stdout and stderr
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=duration + 60)
         except subprocess.TimeoutExpired:
             pass  # Expected - FFmpeg will stop after duration
         except Exception as e:
@@ -243,11 +244,11 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
 
     # Start parallel FFmpeg capture of raw stream (exact bytes from camera)
     ffmpeg_thread = None
-    raw_stream_mkv = None
+    raw_stream_ts = None
     if save_stream:
-        raw_stream_mkv = os.path.join(stream_output_dir, "stream_raw.mkv")
-        print(f"Starting parallel FFmpeg capture to: {raw_stream_mkv}")
-        ffmpeg_thread = _capture_raw_stream_parallel(rtsp_url, raw_stream_mkv, duration)
+        raw_stream_ts = os.path.join(stream_output_dir, "stream_raw.ts")
+        print(f"Starting parallel FFmpeg capture to: {raw_stream_ts}")
+        ffmpeg_thread = _capture_raw_stream_parallel(rtsp_url, raw_stream_ts, duration)
 
     # Set up stream saving if requested
     # Save raw bitstream without muxing to preserve original data
@@ -573,8 +574,8 @@ def analyze_rtsp_stream(rtsp_url, duration, output_dir, debug_log, timestamp_pre
         ffmpeg_thread.join(timeout=duration + 20)
         if ffmpeg_thread.is_alive():
             print("Warning: FFmpeg capture thread still running")
-        elif raw_stream_mkv and os.path.exists(raw_stream_mkv):
-            file_size = os.path.getsize(raw_stream_mkv)
+        elif raw_stream_ts and os.path.exists(raw_stream_ts):
+            file_size = os.path.getsize(raw_stream_ts)
             print(f"✓ Raw stream captured by FFmpeg! ({file_size} bytes)")
 
     # Close stream files
